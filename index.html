@@ -455,7 +455,7 @@ footer{text-align:center;color:#999;font-size:12px;padding:14px}
 <header>
   <h1>🏷️ Placas de Oferta</h1>
   <span class="tag">Rende Mais Supermercados</span>
-  <span class="muted" style="color:#cdd6e6">de / por · A2 · A3 · A4 · A5</span>
+  <span class="muted" style="color:#cdd6e6">de / por · A2 · A3 · A4 · A5 · A6</span>
 </header>
 <main>
 
@@ -495,7 +495,7 @@ footer{text-align:center;color:#999;font-size:12px;padding:14px}
   <div class="toolbar">
     <div><label>Filtrar</label><input type="text" id="filtro" placeholder="digite para filtrar..."></div>
     <div><label>Tamanho p/ selecionados</label>
-      <select id="bulkTam"><option value="">—</option><option>A2</option><option>A3</option><option>A4</option><option>A5</option></select></div>
+      <select id="bulkTam"><option value="">—</option><option>A2</option><option>A3</option><option>A4</option><option>A5</option><option>A6</option></select></div>
     <button class="sec" id="btnMarcar">Marcar todos</button>
     <button class="sec" id="btnDesmarcar">Desmarcar todos</button>
     <span class="muted" id="contagem"></span>
@@ -524,7 +524,7 @@ footer{text-align:center;color:#999;font-size:12px;padding:14px}
     <button id="btnGerar" class="amber" style="font-size:16px">🖨️ Gerar PDF das placas</button>
   </div>
   <div id="resumo"></div>
-  <div class="muted">Placas menores são agrupadas na mesma folha (ex.: 2×A5 por A4). Placas maiores que o papel saem em partes de mesma escala para emendar, com identificação no canto.</div>
+  <div class="muted">Placas menores são agrupadas na mesma folha (ex.: 2×A5 ou 4×A6 por A4). Placas maiores que o papel saem em partes de mesma escala para emendar, com identificação no canto.</div>
 </div>
 
 </main>
@@ -544,8 +544,8 @@ const DEFAULT_ENDPOINT = (location.port === '8086')
 document.getElementById('endpoint').value = DEFAULT_ENDPOINT;
 
 const LOJAS = {1:'L01 Veneza',2:'L02 Máximo',3:'L03 Royal',5:'L05 Alvorada',8:'L08 Tradição',9:'L09 Massangana'};
-const MM = {A2:[420,594], A3:[297,420], A4:[210,297], A5:[148,210]}; // portrait [w,h]
-const ORDEM = ['A2','A3','A4','A5'];
+const MM = {A2:[420,594], A3:[297,420], A4:[210,297], A5:[148,210], A6:[105,148]}; // portrait [w,h]
+const ORDEM = ['A2','A3','A4','A5','A6'];
 
 let itens = [];      // {codigo, nome, gramatura, de, por, obs, tam, qtd, sel, inicio, fim}
 let arteImg = null;  // Image object
