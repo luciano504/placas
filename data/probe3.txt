@@ -1,0 +1,28 @@
+PROMOCAO.PROMOCAO COLS
+column_name
+id
+id_loja
+descricao
+id_tipopromocao
+datainicio
+datatermino
+id_situacaocadastro
+somenteclubevantagens
+qtdlimite
+qtdcupom
+qtdponto
+desconsideraprodutoemoferta
+cupom
+diaslimiteresgate
+diasexpiracao
+controle
+valorcashback
+
+
+LEVEPAGUE ENCARTE
+<br />
+<b>Fatal error</b>:  Uncaught TypeError: streamCsv(): Argument #4 ($firstRow) must be of type ?array, bool given, called in C:\xampp\htdocs\teste\index.php on line 158 and defined in C:\xampp\htdocs\teste\index.php:103
+Stack trace:
+#0 C:\xampp\htdocs\teste\index.php(158): streamCsv(Array, Object(PDOStatement), 'export.csv', false)
+#1 {main}
+  thrown in <b>C:\xampp\htdocs\teste\index.php</b> on line <b>103</b><br />
