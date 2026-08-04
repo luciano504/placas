@@ -1,0 +1,230 @@
+LEVEPAGUE COLS
+column_name,data_type
+id,integer
+id_promocao,integer
+leve,integer
+pague,integer
+desconsideraprodutoemoferta,boolean
+
+
+PROD_LEVEPAGUE COLS
+column_name,data_type
+id,integer
+id_levepague,integer
+id_produto,integer
+precovenda,numeric
+valorcashback,numeric
+
+
+LEVEPAGUE DATA
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>App SQL Dinâmico</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f7fb;
+            margin: 0;
+            padding: 24px;
+            color: #333;
+        }
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 12px 36px rgba(0,0,0,.08);
+            padding: 24px;
+        }
+        h1 {
+            margin-top: 0;
+            font-size: 28px;
+        }
+        label {
+            font-weight: 600;
+            margin-bottom: 8px;
+            display: block;
+        }
+        textarea {
+            width: 100%;
+            min-height: 180px;
+            border: 1px solid #ccd0d8;
+            border-radius: 8px;
+            padding: 14px;
+            font-family: monospace;
+            font-size: 14px;
+            resize: vertical;
+        }
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin: 18px 0;
+        }
+        button {
+            border: none;
+            padding: 12px 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            color: #fff;
+        }
+        button.primary { background: #286ef4; }
+        button.success { background: #28a745; }
+        button.secondary { background: #6c757d; }
+        .message {
+            padding: 14px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+        }
+        .error { background: #fdecea; color: #9b2c2c; }
+        .table-wrapper {
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+        }
+        th, td {
+            border: 1px solid #d6d9e0;
+            padding: 10px 12px;
+            text-align: left;
+        }
+        th {
+            background: #f0f4ff;
+            font-weight: 700;
+        }
+        tr:nth-child(even) { background: #fafbff; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Consulta SQL Dinâmica</h1>
+        <p>Digite o SQL, execute e visualize o resultado. Exporte para Excel ou CSV conforme desejar.</p>
+                    <div class="message error">Erro na consulta SQL: SQLSTATE[42P01]: Undefined table: 7 ERROR:  relation &quot;levepague&quot; does not exist
+LINE 1: SELECT * FROM levepague ORDER BY id DESC LIMIT 15
+                      ^</div>
+                <form method="post">
+            <label for="sql_query">SQL de pesquisa</label>
+            <textarea id="sql_query" name="sql_query" placeholder="SELECT * FROM tabela WHERE ...">SELECT * FROM levepague ORDER BY id DESC LIMIT 15</textarea>
+            <div class="actions">
+                <button type="submit" class="primary">Executar SQL</button>
+                <button type="submit" name="export_type" value="excel" class="success">Exportar para Excel</button>
+                <button type="submit" name="export_type" value="csv" class="secondary">Exportar para CSV</button>
+            </div>
+        </form>
+
+            </div>
+</body>
+</html>
+
+
+PROD_LP DATA
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>App SQL Dinâmico</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f7fb;
+            margin: 0;
+            padding: 24px;
+            color: #333;
+        }
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 12px 36px rgba(0,0,0,.08);
+            padding: 24px;
+        }
+        h1 {
+            margin-top: 0;
+            font-size: 28px;
+        }
+        label {
+            font-weight: 600;
+            margin-bottom: 8px;
+            display: block;
+        }
+        textarea {
+            width: 100%;
+            min-height: 180px;
+            border: 1px solid #ccd0d8;
+            border-radius: 8px;
+            padding: 14px;
+            font-family: monospace;
+            font-size: 14px;
+            resize: vertical;
+        }
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin: 18px 0;
+        }
+        button {
+            border: none;
+            padding: 12px 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            color: #fff;
+        }
+        button.primary { background: #286ef4; }
+        button.success { background: #28a745; }
+        button.secondary { background: #6c757d; }
+        .message {
+            padding: 14px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+        }
+        .error { background: #fdecea; color: #9b2c2c; }
+        .table-wrapper {
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+        }
+        th, td {
+            border: 1px solid #d6d9e0;
+            padding: 10px 12px;
+            text-align: left;
+        }
+        th {
+            background: #f0f4ff;
+            font-weight: 700;
+        }
+        tr:nth-child(even) { background: #fafbff; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Consulta SQL Dinâmica</h1>
+        <p>Digite o SQL, execute e visualize o resultado. Exporte para Excel ou CSV conforme desejar.</p>
+                    <div class="message error">Erro na consulta SQL: SQLSTATE[42P01]: Undefined table: 7 ERROR:  relation &quot;produto_levepague&quot; does not exist
+LINE 1: SELECT * FROM produto_levepague WHERE id_produto IN (14941,5...
+                      ^</div>
+                <form method="post">
+            <label for="sql_query">SQL de pesquisa</label>
+            <textarea id="sql_query" name="sql_query" placeholder="SELECT * FROM tabela WHERE ...">SELECT * FROM produto_levepague WHERE id_produto IN (14941,537764,46891,45928,172928,559954) LIMIT 20</textarea>
+            <div class="actions">
+                <button type="submit" class="primary">Executar SQL</button>
+                <button type="submit" name="export_type" value="excel" class="success">Exportar para Excel</button>
+                <button type="submit" name="export_type" value="csv" class="secondary">Exportar para CSV</button>
+            </div>
+        </form>
+
+            </div>
+</body>
+</html>
