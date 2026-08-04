@@ -4041,8 +4041,9 @@ function parseCombo(it){
   if(!mQ || !mP) return null;
   const qtd = parseInt(mQ[1]); const val = parseFloat(mP[1].replace(',','.'));
   if(!qtd || qtd<2 || !val) return null;
-  const unit = (val <= it.por + 0.001) ? val : val/qtd;
-  return {qtd: qtd, unit: Math.round(unit*100)/100};
+  // preço "CADA" (unitário) ou preço total do combo (ex.: LEVE 4 POR R$ 10,00)
+  const isTotal = (val > it.por + 0.001) && !/CADA/.test(t);
+  return {qtd: qtd, val: Math.round(val*100)/100, isTotal: isTotal, unit: Math.round(val*100)/100};
 }
 function desenharPlaca(it, escala){
   const W = Math.round(1754*escala), H = Math.round(2482*escala);
@@ -4079,16 +4080,18 @@ function desenharPlaca(it, escala){
   }
 
   const combo = parseCombo(it);
-  const precoBig = combo ? combo.unit : it.por;
-  const temDe = it.de > precoBig + 0.001;
-  // --- DE (riscado) ---
+  const comboTotal = combo && combo.isTotal;
+  const precoBig = combo ? combo.val : it.por;
+  const avulso = Math.max(it.de, it.por);
+  const temDe = comboTotal ? (avulso > 0.001) : (it.de > precoBig + 0.001);
+  // --- DE (riscado): no combo total, o valor unitário SEM a promoção ---
   if(temDe){
-    const fsDe = 0.042*H;
+    const fsDe = comboTotal ? 0.036*H : 0.042*H;
     ctx.font = '700 '+fsDe+'px Arial, sans-serif';
     ctx.fillStyle='#444';
-    const t = 'DE R$ '+fmt(it.de);
+    const t = comboTotal ? ('DE R$ '+fmt(avulso)+' CADA') : ('DE R$ '+fmt(it.de));
     const tw = ctx.measureText(t).width;
-    const yDe = 0.575*H;
+    const yDe = comboTotal ? 0.55*H : 0.575*H;
     ctx.fillText(t, cx, yDe);
     ctx.strokeStyle = '#D40000'; ctx.lineWidth = Math.max(3, 0.006*H);
     ctx.beginPath();
@@ -4097,8 +4100,15 @@ function desenharPlaca(it, escala){
     ctx.stroke();
   }
 
-  // --- POR (preço gigante; no combo, o valor unitário do combo) ---
-  const yPor = 0.72*H;
+  // --- linha "LEVE X POR" (combo total) ---
+  if(comboTotal){
+    ctx.font = '900 '+(0.05*H)+'px "Arial Black", Arial, sans-serif';
+    ctx.fillStyle = '#1F3864';
+    ctx.fillText('LEVE '+combo.qtd+' POR', cx, 0.615*H);
+  }
+
+  // --- POR (preço gigante; no combo total, o valor do combo: R$ 10,00) ---
+  const yPor = comboTotal ? 0.755*H : 0.72*H;
   const por = fmt(precoBig);
   const [ints, cents] = por.split(',');
   const fsBig = 0.155*H, fsMed = 0.062*H;
@@ -4106,18 +4116,18 @@ function desenharPlaca(it, escala){
   const wInt = ctx.measureText(ints).width;
   ctx.font = '900 '+fsMed+'px "Arial Black", Arial, sans-serif';
   const wRs = ctx.measureText('R$').width, wCents = ctx.measureText(','+cents).width;
-  const wPor = temDe ? ctx.measureText('POR ').width : 0;
+  const wPor = (temDe && !comboTotal) ? ctx.measureText('POR ').width : 0;
   const total = wPor + wRs + 10*escala + wInt + wCents;
   let x = cx - total/2;
   ctx.fillStyle = '#D40000'; ctx.textAlign='left';
   ctx.font = '900 '+fsMed+'px "Arial Black", Arial, sans-serif';
-  if(temDe) ctx.fillText('POR', x, yPor);
+  if(temDe && !comboTotal) ctx.fillText('POR', x, yPor);
   ctx.fillText('R$', x + wPor, yPor);
   ctx.font = '900 '+fsBig+'px "Arial Black", Arial, sans-serif';
   ctx.fillText(ints, x + wPor + wRs + 10*escala, yPor);
   ctx.font = '900 '+fsMed+'px "Arial Black", Arial, sans-serif';
   ctx.fillText(','+cents, x + wPor + wRs + 10*escala + wInt, yPor - fsBig*0.55);
-  if(combo){
+  if(combo && !comboTotal){
     ctx.font = '900 '+(fsMed*0.62)+'px "Arial Black", Arial, sans-serif';
     ctx.fillText('CADA', x + wPor + wRs + 10*escala + wInt, yPor - fsBig*0.55 + fsMed*0.85);
   }
@@ -4125,9 +4135,11 @@ function desenharPlaca(it, escala){
 
   // --- OBS / COMBO (faixa amarela) ---
   let faixa = '';
-  if(combo){
+  if(comboTotal){
+    faixa = '';
+  } else if(combo){
     faixa = 'NA COMPRA DE '+combo.qtd+' UN';
-    if(it.por > combo.unit + 0.001) faixa += ' · AVULSO R$ '+fmt(it.por);
+    if(it.por > combo.val + 0.001) faixa += ' · AVULSO R$ '+fmt(it.por);
   } else if(it.obs && it.obs.trim()){
     faixa = it.obs.trim();
   }
