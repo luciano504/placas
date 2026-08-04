@@ -491,17 +491,12 @@ footer{text-align:center;color:#999;font-size:12px;padding:14px}
 
 <div class="card">
   <h2><span class="step">2</span> Arte da placa</h2>
-  <div class="row">
-    <img id="artePreview" alt="arte atual" style="height:130px;border:1px solid #ddd;border-radius:8px;background:#fafafa">
-    <div style="flex:1;min-width:260px">
-      <div id="arteDrop" style="border:2px dashed #bbb;border-radius:8px;padding:16px;text-align:center;color:#777;cursor:pointer">
-        Arraste aqui a arte da campanha (PNG ou JPG) — ou clique para escolher o arquivo
-      </div>
-      <div class="muted" style="margin-top:6px">Use a arte no formato retrato (mesma proporção da folha). Ela fica salva neste computador para as próximas vezes.</div>
-      <button class="sec" id="btnArtePadrao" style="margin-top:8px">↩️ Voltar para a arte padrão da semana</button>
-      <input type="file" id="fileArte" accept="image/*" style="display:none">
-    </div>
+  <div id="galeriaArtes" style="display:flex;gap:12px;overflow-x:auto;padding:6px 2px 10px"></div>
+  <div id="arteDrop" style="border:2px dashed #bbb;border-radius:8px;padding:14px;text-align:center;color:#777;cursor:pointer;margin-top:4px">
+    ➕ Adicionar arte (PNG ou JPG) — arraste aqui ou clique para escolher o arquivo
   </div>
+  <div class="muted" style="margin-top:6px">Clique em uma arte para usá-la nas placas. As placas da 🔟 Quarta é 10 sempre usam a arte da própria campanha. Artes enviadas ficam salvas neste computador e podem ser excluídas no ✕.</div>
+  <input type="file" id="fileArte" accept="image/*" style="display:none">
 </div>
 
 <div class="card">
@@ -3825,25 +3820,82 @@ let arteQ10Img = null;
 function carregarArte(src){
   return new Promise((res,rej)=>{ const im = new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=src; });
 }
-function aplicarArte(src, salvar){
-  return carregarArte(src).then(im=>{
-    arteImg = im;
-    document.getElementById('artePreview').src = src;
-    if(salvar){ try{ localStorage.setItem('placas_arte', src); }catch(e){} }
+/* galeria de artes (carrossel) */
+let artes = [];        // {id, nome, src, fixa}
+let arteSel = 'semana';
+function initArtes(){
+  artes = [{id:'semana', nome:'Semana dos Pais', src:ARTE_B64, fixa:true}];
+  if(!ARTE_Q10_B64.includes('__')) artes.push({id:'q10', nome:'Quarta é 10', src:ARTE_Q10_B64, fixa:true});
+  try{
+    const extras = JSON.parse(localStorage.getItem('placas_artes')||'[]');
+    extras.forEach(a=>{ if(a && a.src) artes.push({id:a.id, nome:a.nome||'Minha arte', src:a.src, fixa:false}); });
+    const legada = localStorage.getItem('placas_arte');
+    if(legada && !extras.length){
+      artes.push({id:'u_legada', nome:'Minha arte', src:legada, fixa:false});
+      localStorage.removeItem('placas_arte');
+      localStorage.setItem('placas_artes', JSON.stringify(artes.filter(a=>!a.fixa)));
+    }
+    arteSel = localStorage.getItem('placas_arte_sel') || 'semana';
+  }catch(e){}
+  if(!artes.find(a=>a.id===arteSel)) arteSel = 'semana';
+}
+function salvarArtes(){
+  try{
+    localStorage.setItem('placas_artes', JSON.stringify(artes.filter(a=>!a.fixa)));
+    localStorage.setItem('placas_arte_sel', arteSel);
+  }catch(e){ setStatus('⚠️ Não foi possível salvar a arte neste computador (limite de espaço). Ela funciona apenas nesta sessão.', true); }
+}
+function renderGaleria(){
+  const g = document.getElementById('galeriaArtes');
+  g.innerHTML = '';
+  artes.forEach(a=>{
+    const sel = a.id===arteSel;
+    const card = document.createElement('div');
+    card.style.cssText = 'position:relative;flex:0 0 auto;text-align:center;cursor:pointer;border:3px solid '+(sel?'#1F3864':'#e0e4ec')+';border-radius:10px;padding:6px;background:'+(sel?'#eaf3ff':'#fff');
+    card.innerHTML = '<img src="'+a.src+'" style="height:120px;display:block;border-radius:6px">'+
+      '<div style="font-size:12px;font-weight:'+(sel?'700':'400')+';color:#1F3864;max-width:110px;margin:4px auto 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(sel?'✓ ':'')+esc(a.nome)+'</div>'+
+      (a.fixa ? '' : '<button title="excluir arte" data-delarte="'+a.id+'" style="position:absolute;top:-8px;right:-8px;background:#b00020;color:#fff;border:none;border-radius:50%;width:22px;height:22px;font-size:12px;cursor:pointer;line-height:1">✕</button>');
+    card.addEventListener('click', e=>{
+      if(e.target.dataset.delarte) return;
+      selecionarArte(a.id);
+    });
+    g.appendChild(card);
   });
+  g.querySelectorAll('[data-delarte]').forEach(b=>b.addEventListener('click', e=>{
+    e.stopPropagation();
+    const id = e.target.dataset.delarte;
+    if(!confirm('Excluir esta arte?')) return;
+    artes = artes.filter(a=>a.id!==id);
+    if(arteSel===id) arteSel='semana';
+    salvarArtes(); renderGaleria(); aplicarSelecao();
+  }));
+}
+function aplicarSelecao(){
+  const a = artes.find(x=>x.id===arteSel) || artes[0];
+  return carregarArte(a.src).then(im=>{ arteImg = im; });
+}
+function selecionarArte(id){
+  arteSel = id; salvarArtes(); renderGaleria();
+  aplicarSelecao().then(()=>setStatus('✅ Arte "'+(artes.find(a=>a.id===id)||{}).nome+'" selecionada para as placas.'));
 }
 (function(){
-  let salva = null;
-  try{ salva = localStorage.getItem('placas_arte'); }catch(e){}
-  aplicarArte(salva || ARTE_B64, false).catch(()=>aplicarArte(ARTE_B64, false));
+  initArtes();
+  renderGaleria();
+  aplicarSelecao().catch(()=>{ arteSel='semana'; aplicarSelecao(); });
   if(!ARTE_Q10_B64.includes('__')) carregarArte(ARTE_Q10_B64).then(im=>{ arteQ10Img = im; }).catch(()=>{});
 })();
 function lerArquivoArte(f){
   if(!f || !f.type.startsWith('image/')) return;
   const rd = new FileReader();
-  rd.onload = ev => aplicarArte(ev.target.result, true).then(()=>{
-    setStatus('✅ Arte substituída ('+arteImg.width+'×'+arteImg.height+'). Ela será usada em todas as placas.');
-  }).catch(()=>setStatus('Não foi possível ler essa imagem.', true));
+  rd.onload = ev => {
+    const nome = (f.name||'Minha arte').replace(/\.[^.]+$/,'');
+    const nova = {id:'u'+Date.now(), nome:nome, src:ev.target.result, fixa:false};
+    artes.push(nova);
+    arteSel = nova.id;
+    salvarArtes(); renderGaleria();
+    aplicarSelecao().then(()=>setStatus('✅ Arte "'+nome+'" adicionada e selecionada.'))
+      .catch(()=>{ artes=artes.filter(a=>a.id!==nova.id); arteSel='semana'; renderGaleria(); setStatus('Não foi possível ler essa imagem.', true); });
+  };
   rd.readAsDataURL(f);
 }
 const aDrop = document.getElementById('arteDrop');
@@ -3852,10 +3904,6 @@ aDrop.addEventListener('dragover', e=>{e.preventDefault(); aDrop.style.borderCol
 aDrop.addEventListener('dragleave', ()=>aDrop.style.borderColor='#bbb');
 aDrop.addEventListener('drop', e=>{ e.preventDefault(); aDrop.style.borderColor='#bbb'; lerArquivoArte(e.dataTransfer.files[0]); });
 document.getElementById('fileArte').addEventListener('change', e=>lerArquivoArte(e.target.files[0]));
-document.getElementById('btnArtePadrao').addEventListener('click', ()=>{
-  try{ localStorage.removeItem('placas_arte'); }catch(e){}
-  aplicarArte(ARTE_B64, false).then(()=>setStatus('Arte padrão da semana restaurada.'));
-});
 
 /* ================= BUSCA NO VR ================= */
 function sqlOfertas(){
