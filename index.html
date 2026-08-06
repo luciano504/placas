@@ -465,7 +465,8 @@ footer{text-align:center;color:#999;font-size:12px;padding:14px}
     <div><label>Loja</label>
       <select id="loja">
         <option value="1">L01 Veneza</option><option value="2">L02 Máximo</option>
-        <option value="3">L03 Royal</option><option value="5">L05 Alvorada</option>
+        <option value="3">L03 Royal</option><option value="4">L04 Lojão de Cosméticos</option>
+        <option value="5">L05 Alvorada</option>
         <option value="8">L08 Tradição</option><option value="9">L09 Massangana</option>
       </select></div>
     <div><label>Início da promoção</label><input type="date" id="dtIni"></div>
@@ -556,7 +557,7 @@ const DEFAULT_ENDPOINT = (location.port === '8086')
   : 'http://rendemaisdns.zapto.org:8086/teste/';
 document.getElementById('endpoint').value = DEFAULT_ENDPOINT;
 
-const LOJAS = {1:'L01 Veneza',2:'L02 Máximo',3:'L03 Royal',5:'L05 Alvorada',8:'L08 Tradição',9:'L09 Massangana'};
+const LOJAS = {1:'L01 Veneza',2:'L02 Máximo',3:'L03 Royal',4:'L04 Lojão de Cosméticos',5:'L05 Alvorada',8:'L08 Tradição',9:'L09 Massangana'};
 const MM = {A2:[420,594], A3:[297,420], A4:[210,297], A5:[148,210], A6:[105,148]}; // portrait [w,h]
 const ORDEM = ['A2','A3','A4','A5','A6'];
 
@@ -4348,17 +4349,34 @@ async function gerarPdf(sel){
   document.getElementById('resumo').textContent = '✅ PDF gerado: '+nome+'\n'+tot+' placas em '+folhas+' folhas ('+document.getElementById('papel').value+').';
 }
 
-/* ============ INICIALIZAÇÃO COM OFERTAS EMBUTIDAS (POR LOJA) ============ */
-function carregarLojaEmbutida(){
+/* ============ INICIALIZAÇÃO: DADOS ATUALIZADOS DO SITE, COM RESERVA EMBUTIDA ============ */
+async function carregarLoja(){
   const loja = document.getElementById('loja').value;
-  const csv = (PRELOAD_BY_LOJA[loja]||'').trim();
+  let csv = null, meta = '';
+  try{
+    const r = await fetch('data/loja'+loja+'.csv?v='+Date.now(), {cache:'no-store'});
+    if(r.ok){
+      const t = await r.text();
+      if(t && t.slice(0,20).toLowerCase().includes('codigo')){
+        csv = t;
+        try{
+          const m = await (await fetch('data/meta.json?v='+Date.now(), {cache:'no-store'})).json();
+          meta = m.gerado_em || '';
+        }catch(e){}
+      }
+    }
+  }catch(e){}
+  if(!csv){
+    csv = (PRELOAD_BY_LOJA[loja]||'').trim();
+    meta = PRELOAD_META.geradoEm.includes('__') ? '' : PRELOAD_META.geradoEm;
+  }
   if(!csv || csv.includes('__LOJA')) return;
   processarCsv(csv);
   const s = document.getElementById('status');
-  s.textContent = '✅ ' + s.textContent + (PRELOAD_META.geradoEm.includes('__') ? '' : ' Dados do sistema de ' + PRELOAD_META.geradoEm + '.');
+  s.textContent = '✅ ' + s.textContent + (meta ? ' Dados do sistema de ' + meta + '.' : '');
 }
-document.getElementById('loja').addEventListener('change', carregarLojaEmbutida);
-carregarLojaEmbutida();
+document.getElementById('loja').addEventListener('change', carregarLoja);
+carregarLoja();
 </script>
 </body>
 </html>
