@@ -50,7 +50,7 @@ def main():
           AND v.id_produto IN (
               SELECT DISTINCT id_produto FROM oferta
               WHERE id_situacaooferta = 1
-                AND datainicio <= CURRENT_DATE AND datatermino >= CURRENT_DATE)
+                AND datainicio <= CURRENT_DATE + 7 AND datatermino >= CURRENT_DATE)
         GROUP BY v.id_produto""")
     qtd = {}
     for _, r in vendas.iterrows():
@@ -73,7 +73,7 @@ def main():
             JOIN produto p ON p.id = o.id_produto
             LEFT JOIN mercadologico m ON m.nivel = 1 AND m.mercadologico1 = p.mercadologico1
             WHERE o.id_loja = {loja} AND o.id_situacaooferta = 1
-              AND o.datainicio <= CURRENT_DATE AND o.datatermino >= CURRENT_DATE
+              AND o.datainicio <= CURRENT_DATE + 7 AND o.datatermino >= CURRENT_DATE
             ORDER BY o.id_produto, o.datatermino ASC""")
 
         # produto pai = mais vendido (30d) de cada família
