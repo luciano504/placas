@@ -4,6 +4,7 @@ on:
   schedule:
     - cron: '0 8 * * *'    # 05h Recife
     - cron: '0 14 * * *'   # 11h Recife
+    - cron: '0 20 * * *'   # 17h Recife
   workflow_dispatch:
 
 permissions:
