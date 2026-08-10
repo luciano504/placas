@@ -74,7 +74,7 @@ def main():
             LEFT JOIN mercadologico m ON m.nivel = 1 AND m.mercadologico1 = p.mercadologico1
             WHERE o.id_loja = {loja} AND o.id_situacaooferta = 1
               AND o.datainicio <= CURRENT_DATE + 7 AND o.datatermino >= CURRENT_DATE
-            ORDER BY o.id_produto, o.datatermino ASC""")
+            ORDER BY o.id_produto, o.datainicio DESC, o.datatermino ASC""")
 
         # produto pai = mais vendido (30d) de cada família
         best = {}
