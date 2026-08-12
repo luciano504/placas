@@ -141,6 +141,45 @@ footer{text-align:center;color:#999;font-size:12px;padding:14px}
   <div class="muted">Placas menores são agrupadas na mesma folha (ex.: 2×A5 ou 4×A6 por A4). Placas maiores que o papel saem em partes de mesma escala para emendar, com identificação no canto.</div>
 </div>
 
+<details class="card" id="campanhasCard" style="display:block">
+  <summary style="font-size:16px;color:var(--navy);font-weight:700;cursor:pointer">📢 Campanhas pontuais (gestor) — Quarta é 10, Quinta da Carne, Terça Verde…</summary>
+  <div style="margin-top:12px">
+    <div id="campLista" style="margin-bottom:14px"></div>
+    <div class="row">
+      <div><label>Campanha / arte</label>
+        <select id="campTipo">
+          <option value="q10">🔟 Quarta é 10</option>
+          <option value="terca">🌱 Terça-feira Verde</option>
+          <option value="quinta">🥩 Quinta da Carne</option>
+          <option value="sextou">🎉 Sextou</option>
+          <option value="peixe">🐟 Feira do Peixe</option>
+          <option value="fdsverde">🥬 FDS Verde</option>
+          <option value="bebe">👶 Mundo do Bebê</option>
+          <option value="lojaosemana">🛍️ Semana do Lojão</option>
+          <option value="ofertas">🟠 Ofertas da Semana</option>
+        </select></div>
+      <div><label>Início</label><input type="date" id="campIni"></div>
+      <div><label>Fim (vazio = mesmo dia)</label><input type="date" id="campFim"></div>
+    </div>
+    <div style="margin:10px 0"><label>Lojas</label><br>
+      <label style="font-weight:400;margin-right:12px"><input type="checkbox" class="campLoja" value="1" checked> L01</label>
+      <label style="font-weight:400;margin-right:12px"><input type="checkbox" class="campLoja" value="2" checked> L02</label>
+      <label style="font-weight:400;margin-right:12px"><input type="checkbox" class="campLoja" value="3" checked> L03</label>
+      <label style="font-weight:400;margin-right:12px"><input type="checkbox" class="campLoja" value="4"> L04 (Lojão)</label>
+      <label style="font-weight:400;margin-right:12px"><input type="checkbox" class="campLoja" value="5" checked> L05</label>
+      <label style="font-weight:400;margin-right:12px"><input type="checkbox" class="campLoja" value="8" checked> L08</label>
+      <label style="font-weight:400;margin-right:12px"><input type="checkbox" class="campLoja" value="9" checked> L09</label>
+    </div>
+    <div><label>Itens — um por linha: <b>código preço</b> (ex.: <code>1327 26,99</code>). Na Quarta é 10: <b>código quantidade</b> (ex.: <code>37422 2</code> = leve 2 por R$ 10)</label>
+      <textarea id="campItens" rows="8" style="width:100%;font-family:monospace;font-size:14px" placeholder="1327 26,99&#10;1708 28,99&#10;1542 27,99"></textarea></div>
+    <div class="row" style="margin-top:10px">
+      <button id="campSalvar" class="amber">💾 Salvar campanha</button>
+    </div>
+    <div id="campStatus" style="margin-top:8px;font-size:14px;color:var(--navy);font-weight:600"></div>
+    <div class="muted" style="margin-top:6px">A descrição do produto e o preço "De" (avulso) são buscados automaticamente no VR pela atualização que roda a cada ~3 horas — não precisa digitar. Na Quarta é 10 a placa sai "DE R$ X,XX CADA / LEVE N POR R$ 10,00" na arte da campanha.</div>
+  </div>
+</details>
+
 </main>
 <footer>Placas de Oferta · Rende Mais · consulta ao VR Controller</footer>
 
@@ -4441,6 +4480,7 @@ let arteQ10Img = null;
 let arteAgoraImg = null;
 let arteTercaImg = null;
 let arteQuintaImg = null;
+let campArtImg = {};   // artes fixas por id — usadas nas campanhas automáticas
 function carregarArte(src){
   return new Promise((res,rej)=>{ const im = new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=src; });
 }
@@ -4516,10 +4556,19 @@ function selecionarArte(id){
   initArtes();
   renderGaleria();
   aplicarSelecao().catch(()=>{ arteSel = artes.length ? artes[0].id : null; aplicarSelecao(); });
-  if(!ARTE_Q10_B64.includes('__')) carregarArte(ARTE_Q10_B64).then(im=>{ arteQ10Img = im; }).catch(()=>{});
-  if(!ARTE_AGORA_B64.includes('__')) carregarArte(ARTE_AGORA_B64).then(im=>{ arteAgoraImg = im; }).catch(()=>{});
-  if(!ARTE_TERCA_B64.includes('__')) carregarArte(ARTE_TERCA_B64).then(im=>{ arteTercaImg = im; }).catch(()=>{});
-  if(!ARTE_QUINTA_B64.includes('__')) carregarArte(ARTE_QUINTA_B64).then(im=>{ arteQuintaImg = im; }).catch(()=>{});
+  const fixas = {q10:ARTE_Q10_B64, agora:ARTE_AGORA_B64, terca:ARTE_TERCA_B64, quinta:ARTE_QUINTA_B64,
+                 sextou:ARTE_SEXTOU_B64, peixe:ARTE_PEIXE_B64, fdsverde:ARTE_FDSVERDE_B64,
+                 bebe:ARTE_BEBE_B64, lojaosemana:ARTE_LOJAOSEM_B64, ofertas:ARTE_OFERTAS_B64};
+  for(const [id, b64] of Object.entries(fixas)){
+    if(b64.includes('__')) continue;
+    carregarArte(b64).then(im=>{
+      campArtImg[id] = im;
+      if(id==='q10') arteQ10Img = im;
+      if(id==='agora') arteAgoraImg = im;
+      if(id==='terca') arteTercaImg = im;
+      if(id==='quinta') arteQuintaImg = im;
+    }).catch(()=>{});
+  }
 })();
 function lerArquivoArte(f){
   if(!f || !f.type.startsWith('image/')) return;
@@ -4738,9 +4787,7 @@ function desenharPlaca(it, escala){
   const ctx = cv.getContext('2d');
   // Data crítica sobrepõe qualquer arte escolhida: sai na "Agora ou Nunca"
   const fundo = (it.dc && arteAgoraImg) ? arteAgoraImg
-              : ((it.camp==='q10' && arteQ10Img) ? arteQ10Img
-              : ((it.camp==='terca' && arteTercaImg) ? arteTercaImg
-              : ((it.camp==='quinta' && arteQuintaImg) ? arteQuintaImg : arteImg)));
+              : ((it.camp && campArtImg[it.camp]) ? campArtImg[it.camp] : arteImg);
   if(fundo) ctx.drawImage(fundo,0,0,W,H);
   else { ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H); }
   const cx = W/2;
@@ -4748,7 +4795,7 @@ function desenharPlaca(it, escala){
   ctx.textAlign='center';
 
   // artes com a tábua/logo avançando sobre a área branca → texto começa mais abaixo
-  const artAtual = (it.dc && arteAgoraImg) ? 'agora' : ((it.camp==='q10' && arteQ10Img) ? 'q10' : ((it.camp==='terca' && arteTercaImg) ? 'terca' : ((it.camp==='quinta' && arteQuintaImg) ? 'quinta' : arteSel)));
+  const artAtual = (it.dc && arteAgoraImg) ? 'agora' : ((it.camp && campArtImg[it.camp]) ? it.camp : arteSel);
   const baixo = (artAtual==='quinta' || artAtual==='sextou' || artAtual==='peixe' || artAtual==='terca');
   const sh = baixo ? 0.058 : 0;
 
@@ -5030,8 +5077,15 @@ async function carregarLoja(){
     meta = PRELOAD_META.geradoEm.includes('__') ? '' : PRELOAD_META.geradoEm;
   }
   if(!csv || csv.includes('__LOJA')) return;
-  // campanhas manuais (data/campanhas.csv): mesmo formato + coluna loja na frente
+  // campanhas pontuais: 1º tenta o Supabase (aba Campanhas); senão, data/campanhas.csv
+  let campanhasOk = false;
   try{
+    const linhas = await campanhasSupabase(loja);
+    campanhasOk = true;
+    if(linhas.length) csv = csv + '\n' + linhas.join('\n');
+  }catch(e){}
+  try{
+    if(campanhasOk) throw 0;
     const rc = await fetch('data/campanhas.csv?v='+Date.now(), {cache:'no-store'});
     if(rc.ok){
       const t = (await rc.text()).trim();
@@ -5087,6 +5141,105 @@ async function carregarDataCritica(){
   }catch(e){}
 }
 function brDataISO(iso){ const p = String(iso).slice(0,10).split('-'); return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0] : iso; }
+
+/* ============ CAMPANHAS PONTUAIS (Supabase) ============ */
+const SBH = {apikey: SB_KEY, Authorization: 'Bearer '+SB_KEY, 'Content-Type': 'application/json'};
+function ddmm(iso){ const p = String(iso).slice(0,10).split('-'); return p[2]+'/'+p[1]; }
+async function campanhasSupabase(loja){
+  // linhas prontas (enriquecidas com descrição e preço "De" do VR) da loja, ainda vigentes
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const iso = hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0')+'-'+String(hoje.getDate()).padStart(2,'0');
+  const r = await fetch(SB_URL+'/rest/v1/campanhas_placas?select=*&pendente=eq.false&loja=eq.'+loja+'&fim=gte.'+iso, {headers:SBH});
+  if(!r.ok) throw new Error('sb '+r.status);
+  const rows = await r.json();
+  return rows.map(c => [String(c.codigo), c.descricao||'', (+c.de||0).toFixed(2), (+c.por||0).toFixed(2),
+                        ddmm(c.inicio), ddmm(c.fim), c.secao||'OUTROS', 0, 1, c.camp||'', c.obs||'']
+                  .map(v => '"'+String(v).replace(/"/g,'""')+'"').join(','));
+}
+
+const CAMP_TIPOS = {q10:'🔟 Quarta é 10', terca:'🌱 Terça-feira Verde', quinta:'🥩 Quinta da Carne',
+                    sextou:'🎉 Sextou', peixe:'🐟 Feira do Peixe', fdsverde:'🥬 FDS Verde',
+                    bebe:'👶 Mundo do Bebê', lojaosemana:'🛍️ Semana do Lojão', ofertas:'🟠 Ofertas da Semana'};
+function campTipoNome(id){ return CAMP_TIPOS[id] || id || 'Ofertas'; }
+
+async function renderCampanhasAdmin(){
+  const box = document.getElementById('campLista');
+  if(!box) return;
+  box.innerHTML = '<span class="muted">Carregando…</span>';
+  try{
+    const hoje = new Date(); const iso = hoje.toISOString().slice(0,10);
+    const r = await fetch(SB_URL+'/rest/v1/campanhas_placas?select=camp,inicio,fim,pendente,codigo&fim=gte.'+iso, {headers:SBH});
+    if(!r.ok) throw new Error(r.status===404 ? 'tabela ainda não criada no Supabase' : 'erro '+r.status);
+    const rows = await r.json();
+    if(!rows.length){ box.innerHTML = '<span class="muted">Nenhuma campanha vigente ou futura cadastrada.</span>'; return; }
+    const grp = {};
+    rows.forEach(c=>{
+      const k = (c.camp||'')+'|'+c.inicio+'|'+c.fim;
+      grp[k] = grp[k] || {camp:c.camp, inicio:c.inicio, fim:c.fim, cods:new Set(), pend:0};
+      grp[k].cods.add(c.codigo);
+      if(c.pendente) grp[k].pend++;
+    });
+    box.innerHTML = Object.entries(grp).map(([k,g])=>{
+      const per = g.inicio===g.fim ? brDataISO(g.inicio) : brDataISO(g.inicio)+' a '+brDataISO(g.fim);
+      return '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid #eee">'+
+        '<b>'+campTipoNome(g.camp)+'</b><span>'+per+'</span>'+
+        '<span class="pill">'+g.cods.size+' item(ns)</span>'+
+        (g.pend ? '<span class="pill" style="background:#fff3cd">⏳ aguardando preços do VR</span>' : '')+
+        '<button class="sec" style="margin-left:auto;padding:4px 10px" onclick="excluirCampanha(\''+(g.camp||'')+'\',\''+g.inicio+'\',\''+g.fim+'\')">🗑️ Excluir</button></div>';
+    }).join('');
+  }catch(e){ box.innerHTML = '<span class="muted">⚠️ '+e.message+'</span>'; }
+}
+
+async function excluirCampanha(camp, ini, fim){
+  if(!confirm('Excluir a campanha '+campTipoNome(camp)+' de '+brDataISO(ini)+'? As placas dela somem do aplicativo.')) return;
+  await fetch(SB_URL+'/rest/v1/campanhas_placas?camp=eq.'+encodeURIComponent(camp)+'&inicio=eq.'+ini+'&fim=eq.'+fim, {method:'DELETE', headers:SBH});
+  renderCampanhasAdmin();
+  await carregarLoja(); carregarDataCritica();
+}
+
+async function salvarCampanha(){
+  const st = document.getElementById('campStatus');
+  try{
+    const tipo = document.getElementById('campTipo').value;
+    const ini = document.getElementById('campIni').value;
+    const fim = document.getElementById('campFim').value || ini;
+    if(!ini){ st.textContent = '⚠️ Informe a data da campanha.'; return; }
+    const lojasSel = [...document.querySelectorAll('.campLoja:checked')].map(c=>c.value);
+    if(!lojasSel.length){ st.textContent = '⚠️ Marque pelo menos uma loja.'; return; }
+    const texto = document.getElementById('campItens').value.trim();
+    if(!texto){ st.textContent = '⚠️ Cole a lista de itens.'; return; }
+    const rows = [];
+    const erros = [];
+    texto.split('\n').forEach((ln,i)=>{
+      const l = ln.trim(); if(!l) return;
+      // aceita: "codigo preço" (27,99) | "codigo N" (Quarta é 10: N unidades por R$10) | separado por espaço, ; ou TAB
+      const m = l.replace(/\t/g,' ').replace(/;/g,' ').match(/^(\d+)\s+(\d+(?:[.,]\d{1,2})?)\s*$/);
+      if(!m){ erros.push('linha '+(i+1)+': "'+l+'"'); return; }
+      const cod = parseInt(m[1]); const val = parseFloat(m[2].replace(',','.'));
+      let por = null, obs = '';
+      if(tipo==='q10'){
+        const n = Math.round(val);
+        if(n<=1){ por = 10.00; } else { obs = 'LEVE '+n+' POR R$ 10,00'; }
+      } else {
+        por = val;
+      }
+      lojasSel.forEach(lj=>{
+        rows.push({camp:tipo, loja:parseInt(lj), codigo:cod, por:por, obs:obs, inicio:ini, fim:fim, pendente:true});
+      });
+    });
+    if(erros.length){ st.textContent = '⚠️ Não entendi: '+erros.slice(0,3).join(' · ')+'. Use "código preço" (ex.: 1327 26,99) ou, na Quarta é 10, "código quantidade" (ex.: 37422 2).'; return; }
+    if(!rows.length){ st.textContent = '⚠️ Nenhum item válido.'; return; }
+    st.textContent = 'Salvando '+rows.length+' linha(s)…';
+    const r = await fetch(SB_URL+'/rest/v1/campanhas_placas', {method:'POST', headers:{...SBH, Prefer:'return=minimal'}, body: JSON.stringify(rows)});
+    if(!r.ok){ const t = await r.text(); throw new Error(r.status===404 ? 'Tabela ainda não criada no Supabase (rode o SQL de setup).' : t.slice(0,120)); }
+    document.getElementById('campItens').value = '';
+    st.textContent = '✅ Campanha salva! As descrições e o preço "De" vêm do VR na próxima atualização automática (roda a cada ~3h, de 05h às 20h). Assim que completar, os itens aparecem na lista de placas com a arte da campanha.';
+    renderCampanhasAdmin();
+  }catch(e){ st.textContent = '⚠️ Erro ao salvar: '+e.message; }
+}
+
+document.getElementById('campSalvar')?.addEventListener('click', salvarCampanha);
+document.getElementById('campanhasCard')?.addEventListener('toggle', ev=>{ if(ev.target.open) renderCampanhasAdmin(); });
 
 document.getElementById('loja').addEventListener('change', async ()=>{ await carregarLoja(); carregarDataCritica(); });
 carregarLoja().then(()=>carregarDataCritica());
