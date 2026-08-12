@@ -2,9 +2,7 @@ name: Atualizar dados das placas
 
 on:
   schedule:
-    - cron: '0 8 * * *'    # 05h Recife
-    - cron: '0 14 * * *'   # 11h Recife
-    - cron: '0 20 * * *'   # 17h Recife
+    - cron: '0 8,11,14,17,20,23 * * *'   # 05h, 08h, 11h, 14h, 17h e 20h em Recife
   workflow_dispatch:
 
 permissions:
