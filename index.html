@@ -107,7 +107,7 @@ footer{text-align:center;color:#999;font-size:12px;padding:14px}
     <div><label>Seção</label>
       <select id="fSecao"><option value="">Todas</option></select></div>
     <div><label>Mostrar</label>
-      <select id="soEncarte"><option value="">Todos os itens</option><option value="1">⭐ Só encarte da semana</option><option value="pai">👑 Só produtos pai</option><option value="q10">🔟 Só Quarta é 10</option><option value="terca">🌱 Só Terça-feira Verde</option><option value="quinta">🥩 Só Quinta da Carne</option></select></div>
+      <select id="soEncarte"><option value="">Todos os itens</option><option value="1">⭐ Só encarte da semana</option><option value="pai">👑 Só produtos pai</option></select></div>
     <div><label>Tamanho p/ selecionados</label>
       <select id="bulkTam"><option value="">—</option><option>A2</option><option>A3</option><option>A4</option><option>A5</option><option>A6</option></select></div>
     <button class="sec" id="btnMarcar">Marcar todos</button>
@@ -4702,7 +4702,7 @@ function render(){
     if(it.sel) tr.className='on';
     tr.innerHTML =
       '<td><input type="checkbox" data-i="'+i+'" data-f="sel" '+(it.sel?'checked':'')+'></td>'+
-      '<td>'+(it.dc?'⏰ ':'')+(it.destaque?'⭐ ':'')+(it.camp==='q10'?'🔟 ':'')+(it.camp==='terca'?'🌱 ':'')+(it.camp==='quinta'?'🥩 ':'')+(it.pai&&it.fam>0?'👑 ':'')+it.codigo+'</td>'+
+      '<td>'+(it.dc?'⏰ ':'')+(it.destaque?'⭐ ':'')+(it.camp?campBadge(it.camp)+' ':'')+(it.pai&&it.fam>0?'👑 ':'')+it.codigo+'</td>'+
       '<td><input type="text" data-i="'+i+'" data-f="nome" value="'+esc(it.nome)+'"></td>'+
       '<td><input type="text" data-i="'+i+'" data-f="gramatura" value="'+esc(it.gramatura)+'"></td>'+
       '<td><input type="text" class="preco" data-i="'+i+'" data-f="de" value="'+fmt(it.de)+'"></td>'+
@@ -4739,9 +4739,7 @@ function visivel(it){
   const modo = document.getElementById('soEncarte').value;
   if(modo==='1' && !it.destaque) return false;
   if(modo==='pai' && !it.pai) return false;
-  if(modo==='q10' && it.camp!=='q10') return false;
-  if(modo==='terca' && it.camp!=='terca') return false;
-  if(modo==='quinta' && it.camp!=='quinta') return false;
+  if(modo && modo!=='1' && modo!=='pai' && it.camp!==modo) return false;
   const sec = document.getElementById('fSecao').value;
   if(sec && it.secao && it.secao !== sec) return false;
   if(sec && !it.secao) return false;
@@ -4752,6 +4750,14 @@ function montarSecoes(){
   const atual = sel.value;
   const secoes = [...new Set(itens.map(i=>i.secao).filter(Boolean))].sort();
   sel.innerHTML = '<option value="">Todas</option>' + secoes.map(s=>'<option'+(s===atual?' selected':'')+'>'+esc(s)+'</option>').join('');
+  // filtro "Mostrar": uma opção por campanha presente na loja
+  const se = document.getElementById('soEncarte');
+  const atualM = se.value;
+  const camps = [...new Set(itens.map(i=>i.camp).filter(Boolean))];
+  camps.sort((a,b)=>campTipoNome(a).localeCompare(campTipoNome(b)));
+  se.innerHTML = '<option value="">Todos os itens</option><option value="1">⭐ Só encarte da semana</option><option value="pai">👑 Só produtos pai</option>' +
+    camps.map(c=>'<option value="'+esc(c)+'"'+(c===atualM?' selected':'')+'>'+campBadge(c)+' Só '+campTipoNome(c).replace(/^\S+\s/,'')+'</option>').join('');
+  if(atualM && !['','1','pai'].includes(atualM) && !camps.includes(atualM)) se.value='';
 }
 document.getElementById('filtro').addEventListener('input', render);
 document.getElementById('soEncarte').addEventListener('change', render);
@@ -5161,6 +5167,7 @@ const CAMP_TIPOS = {q10:'🔟 Quarta é 10', terca:'🌱 Terça-feira Verde', qu
                     sextou:'🎉 Sextou', peixe:'🐟 Feira do Peixe', fdsverde:'🥬 FDS Verde',
                     bebe:'👶 Mundo do Bebê', lojaosemana:'🛍️ Semana do Lojão', ofertas:'🟠 Ofertas da Semana'};
 function campTipoNome(id){ return CAMP_TIPOS[id] || id || 'Ofertas'; }
+function campBadge(id){ const n = CAMP_TIPOS[id]; return n ? n.split(' ')[0] : '📢'; }
 
 async function renderCampanhasAdmin(){
   const box = document.getElementById('campLista');
