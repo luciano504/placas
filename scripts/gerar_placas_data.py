@@ -85,9 +85,17 @@ def enriquecer_campanhas():
             pv[k] = float(r["precovenda"] or 0)
             pva[k] = float(r["precovendaanterior"] or 0)
 
-        completos, remover = [], []
+        if not pv:
+            # VR não devolveu preço nenhum (fora do ar / erro) — não mexe nos
+            # pendentes: ficam guardados para a próxima tentativa.
+            print(f"campanhas: VR sem resposta de preços para {len(pend)} pendentes; "
+                  "mantidos para a próxima atualização.")
+            pend = []
+
+        completos, remover, sem_preco = [], [], []
         for p in pend:
             cod = int(p["codigo"])
+            gerou_antes = len(completos)
             n_combo = 0
             m = re.match(r"LEVE\s*(\d+)", str(p.get("obs") or ""))
             if m:
@@ -125,7 +133,13 @@ def enriquecer_campanhas():
                     "obs": p.get("obs") or "", "inicio": p["inicio"], "fim": p["fim"],
                     "pendente": False,
                 })
-            remover.append(p["id"])
+            if len(completos) > gerou_antes:
+                remover.append(p["id"])   # só remove o pendente que virou placa
+            else:
+                sem_preco.append(cod)     # sem preço no VR: continua pendente
+        if sem_preco:
+            print(f"campanhas: sem preço/cadastro no VR (seguem pendentes): "
+                  f"{sorted(set(sem_preco))}")
         if completos:
             r = requests.post(f"{SB_URL}/rest/v1/campanhas_placas",
                               headers={**SBH, "Prefer": "return=minimal"},
