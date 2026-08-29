@@ -65,6 +65,19 @@ def enriquecer_campanhas():
     if pend:
         ids = sorted({int(p["codigo"]) for p in pend})
         lista = ",".join(str(i) for i in ids)
+        # Lojão de Cosméticos (loja 4) só entra na expansão "todas as lojas"
+        # se o produto de fato vende lá (últimos 60 dias)
+        vende_l4 = set()
+        try:
+            v4 = query_vr(f"""
+                SELECT DISTINCT vi.id_produto AS codigo
+                FROM pdv.vendaitem vi
+                JOIN pdv.venda v ON v.id = vi.id_venda
+                WHERE v.id_loja = 4 AND vi.data >= CURRENT_DATE - 60
+                  AND vi.id_produto IN ({lista})""")
+            vende_l4 = {int(r["codigo"]) for _, r in v4.iterrows()}
+        except Exception as e:  # noqa: BLE001
+            print(f"campanhas: checagem de vendas L04 falhou ({e}); L04 fica de fora da expansão.")
         info = query_vr(f"""
             SELECT p.id AS codigo, p.descricaocompleta AS descricao,
                    COALESCE(m.descricao,'OUTROS') AS secao
@@ -100,7 +113,8 @@ def enriquecer_campanhas():
             m = re.match(r"LEVE\s*(\d+)", str(p.get("obs") or ""))
             if m:
                 n_combo = int(m.group(1))
-            lojas_alvo = LOJAS if int(p.get("loja") or 0) == 0 else [int(p["loja"])]
+            lojas_alvo = ([lj for lj in LOJAS if lj != 4 or cod in vende_l4]
+                          if int(p.get("loja") or 0) == 0 else [int(p["loja"])])
             for lj in lojas_alvo:
                 de = pv.get((cod, lj), 0)
                 if not de or de >= 9000:   # sem preço nessa loja (ex.: açougue no Lojão)
