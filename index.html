@@ -206,8 +206,8 @@ let arteImg = null;  // Image object
 let seqManual = 1;
 
 /* ============ OFERTAS VIGENTES EMBUTIDAS (por loja) ============ */
-const PRELOAD_META = {geradoEm:'10/08 19:13', ini:'2026-08-25', fim:'2026-08-31'};
-const BUILD_ID = '20260827205930';
+const PRELOAD_META = {geradoEm:'10/08 19:13', ini:'2026-09-01', fim:'2026-09-07'};
+const BUILD_ID = '20260831211346';
 /* auto-atualização: se o site tem versão mais nova que a em cache, recarrega sozinho */
 (function(){
   fetch('versao.txt?x='+Date.now(), {cache:'no-store'})
@@ -221,8 +221,8 @@ const BUILD_ID = '20260827205930';
       location.replace(u.toString());
     }).catch(()=>{});
 })();
-const OBS_MAP = {'45928':'LEVE 2 POR R$ 12,99 CADA','46891':'LEVE 4 POR R$ 10,00','14941':'LEVE 12 POR R$ 4,59 CADA','537764':'LEVE 12 POR R$ 5,49 CADA','43543':'LEVE 2 POR R$ 8,99 CADA'};
-const ENCARTE = new Set(['35423','586420','46254','36024','35308','40408','45928','817171','31866','592897','630578','46891','35299','40741','46481','14941','537764','537160','566357','674605','33959','39861','37422','46895','43543','41539','16706','2083','44705','28578','592315','596221','20638','1826','61776','1326','570575','30407','45434','1359','2333','1716']);
+const OBS_MAP = {'45928':'LEVE 2 POR R$ 12,99 CADA','14941':'LEVE 12 POR R$ 4,59 CADA','537764':'LEVE 12 POR R$ 5,49 CADA'};
+const ENCARTE = new Set(['47355','586420','46253','36024','35308','40408','45928','47385','592897','630578','46891','35299','40741','46481','14941','537764','675423','566357','674605','33959','39861','37422','538035','46895','43543','41539','506621','508535','41352','20754','911143','16706','2083','44705','28578','33926','44340','123315','1826','617776','1320','570621','30407','10184','1359','2333','23486','45683','28884','903221','46589','718386','41338','763446','779296','198757','755249','46468','813532']);
 const PRELOAD_BY_LOJA = {
  '1': `codigo,descricao,preconormal,precooferta,inicio,fim,secao,familia,pai,camp,obs
 88,LING TOSCANA DE FRANGO MAURICEA KG,19.29,17.99,07/08,10/08,SALGADOS / DEFUMADOS,0,1,,
