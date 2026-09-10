@@ -5187,7 +5187,8 @@ async function campanhasSupabase(loja){
 const CAMP_TIPOS = {q10:'🔟 Quarta é 10', terca:'🌱 Terça-feira Verde', quinta:'🥩 Quinta da Carne',
                     sextou:'🎉 Sextou', peixe:'🐟 Feira do Peixe', fdsverde:'🥬 FDS Verde',
                     bebe:'👶 Mundo do Bebê', lojaosemana:'🛍️ Semana do Lojão', ofertas:'🟠 Ofertas da Semana',
-                    diamais:'🛒 Dia Mais', play:'▶️ Play no Feriadão'};
+                    diamais:'🛒 Dia Mais', play:'▶️ Play no Feriadão',
+                    ofsem:'🟠 Oferta da Semana', offds:'🔥 Oferta do Fim de Semana'};
 function campTipoNome(id){ return CAMP_TIPOS[id] || id || 'Ofertas'; }
 function campBadge(id){ const n = CAMP_TIPOS[id]; return n ? n.split(' ')[0] : '📢'; }
 
