@@ -184,6 +184,119 @@ def enriquecer_campanhas():
     print(f"campanhas: data/campanhas.csv regravado com {len(rows)} linhas.")
 
 
+CAMPS_ENCARTE = ("ofsem", "offds")   # Oferta da Semana / Oferta do Fim de Semana
+
+
+def campanhas_do_encarte():
+    """Traz para as placas os itens já LIBERADOS no app do encarte.
+
+    O app do encarte (encarte.html + encarte.php, na pasta do App SQL) grava a
+    lista da semana em rm_encarte_item e o OK final em rm_encarte_aprovacao,
+    ambos no próprio Postgres do VR. Aqui a gente lê o que está liberado e
+    coloca em campanhas_placas, para a placa ficar pronta ANTES de a central
+    lançar a oferta no VR.
+
+    Item que a central já lançou (está em `oferta` vigente naquela loja) é
+    descartado: dali em diante ele vem pelo caminho normal, sem duplicar.
+    """
+    try:
+        itens = query_vr("""
+            SELECT i.semana, i.momento, i.id_loja, i.id_produto AS codigo,
+                   i.descricao, i.secao, i.preco_normal, i.preco_oferta,
+                   i.tipo, i.qtd_min, i.preco_esc,
+                   to_char(CASE WHEN i.momento = 'chumbo' THEN i.semana + 3 ELSE i.semana END,
+                           'YYYY-MM-DD') AS inicio,
+                   to_char(CASE WHEN i.momento = 'chumbo' THEN i.semana + 5 ELSE i.semana + 6 END,
+                           'YYYY-MM-DD') AS fim
+            FROM rm_encarte_item i
+            JOIN rm_encarte_aprovacao a
+              ON a.semana = i.semana AND a.momento = i.momento
+            WHERE i.ativo
+              AND (CASE WHEN i.momento = 'chumbo' THEN i.semana + 5 ELSE i.semana + 6 END)
+                  >= CURRENT_DATE""")
+    except Exception as e:  # noqa: BLE001
+        print(f"encarte: não consegui ler a lista liberada ({e}); placas seguem sem ela.")
+        return
+
+    if itens is None or itens.empty:
+        print("encarte: nenhuma lista liberada e vigente.")
+    # já lançados no VR — esses saem da nossa lista para não duplicar
+    ja_no_vr = set()
+    try:
+        of = query_vr("""
+            SELECT DISTINCT o.id_produto AS codigo, o.id_loja
+            FROM oferta o
+            WHERE o.id_situacaooferta = 1
+              AND o.datainicio <= CURRENT_DATE + 7 AND o.datatermino >= CURRENT_DATE""")
+        if of is not None and not of.empty:
+            ja_no_vr = {(int(r["codigo"]), int(r["id_loja"])) for _, r in of.iterrows()}
+    except Exception as e:  # noqa: BLE001
+        print(f"encarte: não consegui checar as ofertas já lançadas ({e}); sigo sem o descarte.")
+
+    lojas_super = [1, 2, 3, 5, 8, 9]   # o encarte é das 6 de supermercado; L04 fica fora
+    linhas, descartados = [], 0
+    for _, r in (itens.iterrows() if itens is not None and not itens.empty else []):
+        cod = int(r["codigo"])
+        camp = "offds" if str(r["momento"]).strip() == "chumbo" else "ofsem"
+        alvo = lojas_super if int(r["id_loja"] or 0) == 0 else [int(r["id_loja"])]
+        de = float(r["preco_normal"] or 0)
+        por = float(r["preco_oferta"] or 0)
+        if por <= 0:
+            continue
+        if de <= por:
+            de = por
+
+        # condição da oferta vira o texto da placa (o app já interpreta "LEVE N ...")
+        tipo = str(r["tipo"] or "simples").strip()
+        obs = ""
+        try:
+            qmin = float(r["qtd_min"] or 0)
+            pesc = float(r["preco_esc"] or 0)
+        except Exception:  # noqa: BLE001
+            qmin = pesc = 0
+        if tipo != "simples" and qmin > 0 and pesc > 0:
+            nq = str(int(qmin)) if float(qmin).is_integer() else f"{qmin:.3f}".rstrip("0").rstrip(".")
+            val = f"{pesc:.2f}".replace(".", ",")
+            if tipo == "leve":
+                # o "CADA" é o que faz a placa tratar o valor como unitário
+                obs = f"LEVE {nq} POR R$ {val} CADA"
+            elif tipo == "combo":
+                obs = f"LEVE {nq} POR R$ {val}"          # sem "CADA" = valor total
+            elif tipo == "peso":
+                obs = f"ACIMA DE {nq} KG, O KG SAI POR R$ {val}"
+
+        for lj in alvo:
+            # Item de de/por simples que a central já lançou vem pelo caminho normal
+            # do VR — descarta para não sair duas vezes. Item COM CONDIÇÃO fica:
+            # o VR não guarda o texto ("acima de 1 kg...") e sem ele a placa sai errada.
+            if (cod, lj) in ja_no_vr and not obs:
+                descartados += 1
+                continue
+            linhas.append({
+                "camp": camp, "loja": lj, "codigo": cod,
+                "descricao": " ".join(str(r["descricao"] or "").split()),
+                "secao": str(r["secao"] or "OUTROS").strip(),
+                "de": round(de, 2), "por": round(por, 2), "obs": obs,
+                "inicio": r["inicio"], "fim": r["fim"], "pendente": False,
+            })
+
+    # troca o bloco do encarte inteiro (apaga o anterior e regrava)
+    try:
+        lista = ",".join(CAMPS_ENCARTE)
+        requests.delete(f"{SB_URL}/rest/v1/campanhas_placas?camp=in.({lista})",
+                        headers=SBH, timeout=60).raise_for_status()
+        if linhas:
+            r = requests.post(f"{SB_URL}/rest/v1/campanhas_placas",
+                              headers={**SBH, "Prefer": "return=minimal"},
+                              json=linhas, timeout=60)
+            r.raise_for_status()
+    except Exception as e:  # noqa: BLE001
+        print(f"encarte: falhou ao gravar em campanhas_placas ({e}).")
+        return
+    print(f"encarte: {len(linhas)} linhas liberadas para as placas "
+          f"({descartados} já estavam lançadas no VR e foram descartadas).")
+
+
 def main():
     # vendas 30d (rede) dos produtos em promoção vigente — para eleger o produto pai
     vendas = query_vr("""
@@ -250,6 +363,11 @@ def main():
         enriquecer_campanhas()
     except Exception as e:  # noqa: BLE001
         print(f"campanhas: falhou ({e}); dados principais seguem normais.")
+
+    try:
+        campanhas_do_encarte()
+    except Exception as e:  # noqa: BLE001
+        print(f"encarte: falhou ({e}); dados principais seguem normais.")
 
     agora = datetime.now(RECIFE)
     with open("data/meta.json", "w", encoding="utf-8") as f:
