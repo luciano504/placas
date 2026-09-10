@@ -285,7 +285,15 @@ def campanhas_do_encarte():
                 v_de, v_por = preco_vr[(cod, lj)]
                 if v_por > 0:
                     por_lj = v_por
-                    de_lj = v_de if v_de > v_por else v_por
+                    # o "de" tem de ser maior que o "por", senão a placa sai
+                    # "de 29,99 por 29,99". Ordem: preço normal do VR, depois o
+                    # preço normal que o encarte guardou, e só então desiste.
+                    if v_de > v_por:
+                        de_lj = v_de
+                    elif de > v_por:
+                        de_lj = de
+                    else:
+                        de_lj = v_por
                 do_vr += 1
             linhas.append({
                 "camp": camp, "loja": lj, "codigo": cod,
