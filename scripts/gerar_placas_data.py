@@ -196,8 +196,15 @@ def campanhas_do_encarte():
     coloca em campanhas_placas, para a placa ficar pronta ANTES de a central
     lançar a oferta no VR.
 
-    Item que a central já lançou (está em `oferta` vigente naquela loja) é
-    descartado: dali em diante ele vem pelo caminho normal, sem duplicar.
+    Item que a central já lançou no VR NÃO é mais descartado (era assim até
+    10/09/2026 e deixava a campanha "Oferta do Fim de Semana" quase vazia no
+    app: os itens estavam lá, mas soltos no meio das promoções do VR, sem
+    etiqueta de campanha). Agora ele continua na campanha e quem sai é a linha
+    correspondente do data/lojaN.csv — por isso esta função devolve o conjunto
+    de pares (código, loja) publicados, que o main() usa para não repetir.
+
+    Quando o item já está no VR, o "de/por" vem do VR, não do encarte: o preço
+    da placa tem de bater com o preço do caixa.
     """
     try:
         itens = query_vr("""
@@ -216,25 +223,29 @@ def campanhas_do_encarte():
                   >= CURRENT_DATE""")
     except Exception as e:  # noqa: BLE001
         print(f"encarte: não consegui ler a lista liberada ({e}); placas seguem sem ela.")
-        return
+        return set()
 
     if itens is None or itens.empty:
         print("encarte: nenhuma lista liberada e vigente.")
-    # já lançados no VR — esses saem da nossa lista para não duplicar
-    ja_no_vr = set()
+    # preço que o VR já tem para o item (é ele que vale na placa)
+    preco_vr = {}
     try:
         of = query_vr("""
-            SELECT DISTINCT o.id_produto AS codigo, o.id_loja
+            SELECT DISTINCT ON (o.id_produto, o.id_loja)
+                   o.id_produto AS codigo, o.id_loja, o.preconormal, o.precooferta
             FROM oferta o
             WHERE o.id_situacaooferta = 1
-              AND o.datainicio <= CURRENT_DATE + 7 AND o.datatermino >= CURRENT_DATE""")
+              AND o.datainicio <= CURRENT_DATE + 7 AND o.datatermino >= CURRENT_DATE
+            ORDER BY o.id_produto, o.id_loja, o.datainicio DESC, o.datatermino ASC""")
         if of is not None and not of.empty:
-            ja_no_vr = {(int(r["codigo"]), int(r["id_loja"])) for _, r in of.iterrows()}
+            for _, r in of.iterrows():
+                preco_vr[(int(r["codigo"]), int(r["id_loja"]))] = (
+                    float(r["preconormal"] or 0), float(r["precooferta"] or 0))
     except Exception as e:  # noqa: BLE001
-        print(f"encarte: não consegui checar as ofertas já lançadas ({e}); sigo sem o descarte.")
+        print(f"encarte: não consegui ler as ofertas já lançadas ({e}); uso o preço do encarte.")
 
     lojas_super = [1, 2, 3, 5, 8, 9]   # o encarte é das 6 de supermercado; L04 fica fora
-    linhas, descartados = [], 0
+    linhas, publicados, do_vr = [], set(), 0
     for _, r in (itens.iterrows() if itens is not None and not itens.empty else []):
         cod = int(r["codigo"])
         camp = "offds" if str(r["momento"]).strip() == "chumbo" else "ofsem"
@@ -266,19 +277,24 @@ def campanhas_do_encarte():
                 obs = f"ACIMA DE {nq} KG, O KG SAI POR R$ {val}"
 
         for lj in alvo:
-            # Item de de/por simples que a central já lançou vem pelo caminho normal
-            # do VR — descarta para não sair duas vezes. Item COM CONDIÇÃO fica:
-            # o VR não guarda o texto ("acima de 1 kg...") e sem ele a placa sai errada.
-            if (cod, lj) in ja_no_vr and not obs:
-                descartados += 1
-                continue
+            # Se a central já lançou no VR, o preço da placa é o do VR (é o que
+            # o cliente vai pagar no caixa). O texto da condição continua vindo
+            # do encarte: o VR não guarda "acima de 1 kg, o kg sai por...".
+            de_lj, por_lj = de, por
+            if (cod, lj) in preco_vr:
+                v_de, v_por = preco_vr[(cod, lj)]
+                if v_por > 0:
+                    por_lj = v_por
+                    de_lj = v_de if v_de > v_por else v_por
+                do_vr += 1
             linhas.append({
                 "camp": camp, "loja": lj, "codigo": cod,
                 "descricao": " ".join(str(r["descricao"] or "").split()),
                 "secao": str(r["secao"] or "OUTROS").strip(),
-                "de": round(de, 2), "por": round(por, 2), "obs": obs,
+                "de": round(de_lj, 2), "por": round(por_lj, 2), "obs": obs,
                 "inicio": r["inicio"], "fim": r["fim"], "pendente": False,
             })
+            publicados.add((cod, lj))
 
     # troca o bloco do encarte inteiro (apaga o anterior e regrava)
     try:
@@ -292,9 +308,10 @@ def campanhas_do_encarte():
             r.raise_for_status()
     except Exception as e:  # noqa: BLE001
         print(f"encarte: falhou ao gravar em campanhas_placas ({e}).")
-        return
+        return set()
     print(f"encarte: {len(linhas)} linhas liberadas para as placas "
-          f"({descartados} já estavam lançadas no VR e foram descartadas).")
+          f"({do_vr} com preço vindo do VR, já lançado pela central).")
+    return publicados
 
 
 def main():
@@ -314,6 +331,15 @@ def main():
             qtd[int(r["codigo"])] = float(r["qtd30"])
         except Exception:  # noqa: BLE001
             pass
+
+    # O encarte grava PRIMEIRO e devolve os pares (código, loja) que saem com
+    # etiqueta de campanha. Esses ficam de fora do data/lojaN.csv logo abaixo,
+    # senão o mesmo item apareceria duas vezes na lista do app.
+    try:
+        do_encarte = campanhas_do_encarte()
+    except Exception as e:  # noqa: BLE001
+        print(f"encarte: falhou ({e}); dados principais seguem normais.")
+        do_encarte = set()
 
     total = 0
     for loja in LOJAS:
@@ -346,26 +372,27 @@ def main():
             w = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
             w.writerow(["codigo", "descricao", "preconormal", "precooferta",
                         "inicio", "fim", "secao", "familia", "pai", "camp", "obs"])
+            escritas = 0
             for _, r in df.iterrows():
                 fam = int(r["familia"] or 0)
                 cod = int(r["codigo"])
+                if (cod, loja) in do_encarte:
+                    continue          # já vai sair etiquetado como campanha do encarte
+                escritas += 1
                 pai = 1 if (fam == 0 or best.get(fam, (0, 0))[0] == cod) else 0
                 w.writerow([cod, str(r["descricao"] or "").strip(),
                             f'{float(r["preconormal"] or 0):.2f}',
                             f'{float(r["precooferta"] or 0):.2f}',
                             r["inicio"], r["fim"], str(r["secao"] or "").strip(),
                             fam, pai, "", ""])
-        total += len(df)
-        print(f"loja{loja}: {len(df)} promoções vigentes.")
+        total += escritas
+        movidas = len(df) - escritas
+        print(f"loja{loja}: {escritas} promoções vigentes"
+              + (f" ({movidas} saíram como campanha do encarte)." if movidas else "."))
         time.sleep(2)
 
-    # O encarte grava antes: quem regrava data/campanhas.csv é o enriquecer_campanhas(),
-    # e assim o arquivo de reserva já sai com as linhas do encarte na mesma rodada.
-    try:
-        campanhas_do_encarte()
-    except Exception as e:  # noqa: BLE001
-        print(f"encarte: falhou ({e}); dados principais seguem normais.")
-
+    # enriquecer_campanhas() regrava data/campanhas.csv a partir do Supabase —
+    # como o encarte já gravou lá em cima, o arquivo de reserva sai completo.
     try:
         enriquecer_campanhas()
     except Exception as e:  # noqa: BLE001
