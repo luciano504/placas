@@ -244,8 +244,28 @@ def campanhas_do_encarte():
     except Exception as e:  # noqa: BLE001
         print(f"encarte: não consegui ler as ofertas já lançadas ({e}); uso o preço do encarte.")
 
+    # preço anterior de gôndola — última cartada para o "de" quando o VR lançou
+    # a oferta com preconormal igual ao precooferta (mesma regra que o
+    # enriquecer_campanhas() já usa nas campanhas pontuais)
+    anterior = {}
+    try:
+        cods = sorted({int(r["codigo"]) for _, r in itens.iterrows()}) if (
+            itens is not None and not itens.empty) else []
+        if cods:
+            pc = query_vr(f"""
+                SELECT id_produto AS codigo, id_loja, precovendaanterior
+                FROM produtocomplemento
+                WHERE id_produto IN ({','.join(str(c) for c in cods)})
+                  AND id_loja IN (1,2,3,5,8,9)""")
+            if pc is not None and not pc.empty:
+                for _, r in pc.iterrows():
+                    anterior[(int(r["codigo"]), int(r["id_loja"]))] = float(
+                        r["precovendaanterior"] or 0)
+    except Exception as e:  # noqa: BLE001
+        print(f"encarte: não consegui ler o preço anterior ({e}); sigo sem ele.")
+
     lojas_super = [1, 2, 3, 5, 8, 9]   # o encarte é das 6 de supermercado; L04 fica fora
-    linhas, publicados, do_vr = [], set(), 0
+    linhas, publicados, do_vr, sem_desconto = [], set(), 0, []
     for _, r in (itens.iterrows() if itens is not None and not itens.empty else []):
         cod = int(r["codigo"])
         camp = "offds" if str(r["momento"]).strip() == "chumbo" else "ofsem"
@@ -286,15 +306,20 @@ def campanhas_do_encarte():
                 if v_por > 0:
                     por_lj = v_por
                     # o "de" tem de ser maior que o "por", senão a placa sai
-                    # "de 29,99 por 29,99". Ordem: preço normal do VR, depois o
-                    # preço normal que o encarte guardou, e só então desiste.
+                    # "de 29,99 por 29,99". Ordem: preço normal do VR, o preço
+                    # normal que o encarte guardou, o preço anterior de gôndola.
+                    ant = anterior.get((cod, lj), 0)
                     if v_de > v_por:
                         de_lj = v_de
                     elif de > v_por:
                         de_lj = de
+                    elif ant > v_por:
+                        de_lj = ant
                     else:
                         de_lj = v_por
                 do_vr += 1
+            if de_lj <= por_lj:
+                sem_desconto.append((cod, lj))
             linhas.append({
                 "camp": camp, "loja": lj, "codigo": cod,
                 "descricao": " ".join(str(r["descricao"] or "").split()),
@@ -319,6 +344,9 @@ def campanhas_do_encarte():
         return set()
     print(f"encarte: {len(linhas)} linhas liberadas para as placas "
           f"({do_vr} com preço vindo do VR, já lançado pela central).")
+    if sem_desconto:
+        cods_sd = sorted({c for c, _ in sem_desconto})
+        print(f"encarte: ATENÇÃO — sem desconto (de = por), a placa sai errada: {cods_sd}")
     return publicados
 
 
