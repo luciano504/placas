@@ -359,15 +359,17 @@ def main():
         print(f"loja{loja}: {len(df)} promoções vigentes.")
         time.sleep(2)
 
-    try:
-        enriquecer_campanhas()
-    except Exception as e:  # noqa: BLE001
-        print(f"campanhas: falhou ({e}); dados principais seguem normais.")
-
+    # O encarte grava antes: quem regrava data/campanhas.csv é o enriquecer_campanhas(),
+    # e assim o arquivo de reserva já sai com as linhas do encarte na mesma rodada.
     try:
         campanhas_do_encarte()
     except Exception as e:  # noqa: BLE001
         print(f"encarte: falhou ({e}); dados principais seguem normais.")
+
+    try:
+        enriquecer_campanhas()
+    except Exception as e:  # noqa: BLE001
+        print(f"campanhas: falhou ({e}); dados principais seguem normais.")
 
     agora = datetime.now(RECIFE)
     with open("data/meta.json", "w", encoding="utf-8") as f:
