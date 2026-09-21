@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bipar Plaquinhas — Rende Mais</title>
+<script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
+<style>
+:root{--navy:#1F3864;--amber:#FFBF00}
+*{box-sizing:border-box} body{margin:0;font-family:Arial;background:#f2f4f8;color:#222}
+header{background:var(--navy);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+h1{margin:0;font-size:18px}
+main{max-width:560px;margin:0 auto;padding:12px}
+.card{background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.12);padding:14px;margin-bottom:12px}
+select,input{padding:10px;border:1px solid #c6cede;border-radius:6px;font-size:16px}
+button{border:none;border-radius:8px;padding:12px 16px;font-size:16px;font-weight:700;cursor:pointer}
+.acao{background:var(--navy);color:#fff}.amber{background:var(--amber);color:var(--navy)}.sec{background:#e8ecf3;color:var(--navy)}
+#scanbox{width:100%;border-radius:10px;display:none;background:#000}
+table{width:100%;border-collapse:collapse;font-size:15px;margin-top:8px}
+td{padding:8px 4px;border-bottom:1px solid #eee}
+#st{font-weight:700;color:var(--navy);margin:8px 0;min-height:22px}
+.qbt{width:38px;height:38px;font-size:18px;padding:0}
+</style>
+</head>
+<body>
+<header><h1>🔫 Bipar Plaquinhas</h1><span style="flex:1"></span>
+  <select id="loja">
+    <option value="1">L01 Veneza</option><option value="2">L02 Máximo</option>
+    <option value="3">L03 Royal</option><option value="4">L04 Lojão</option>
+    <option value="5">L05 Alvorada</option><option value="8">L08 Tradição</option>
+    <option value="9">L09 Massangana</option>
+  </select>
+</header>
+<main>
+<div class="card">
+  <button class="acao" id="btnCam" style="width:100%">📷 Abrir câmera</button>
+  <video id="scanbox" playsinline muted style="margin-top:10px"></video>
+  <div id="st">Aponte a câmera para o código de barras — ele entra sozinho na lista.</div>
+  <div style="display:flex;gap:8px">
+    <input id="ean" inputmode="numeric" placeholder="ou digite o código" style="flex:1">
+    <button class="sec" onclick="addManual()">➕</button>
+  </div>
+</div>
+<div class="card">
+  <b id="tot">0 item(ns)</b>
+  <table><tbody id="tb"></tbody></table>
+  <div style="display:flex;gap:8px;margin-top:10px">
+    <button class="sec" onclick="lista=[];render()">Limpar</button>
+    <button class="amber" style="flex:1" onclick="enviar()">📤 Enviar para a impressora</button>
+  </div>
+  <div style="font-size:13px;color:#666;margin-top:8px">Depois de enviar, no computador da impressora abra o aplicativo das plaquinhas → aba Bipar → <b>📥 Carregar fila enviada</b>.</div>
+</div>
+</main>
+<script>
+const FILA_URL='http://rendemaisdns.zapto.org:8086/teste/plaquinhas_fila.php';
+let lista=[]; let scanStream=null, zxReader=null, scanTimer=null, ultimo='', ultimoT=0;
+const st=t=>document.getElementById('st').textContent=t;
+function beepOk(){ try{navigator.vibrate&&navigator.vibrate(80);}catch(e){}
+  try{const c=new (window.AudioContext||window.webkitAudioContext)();const o=c.createOscillator();o.frequency.value=1200;o.connect(c.destination);o.start();setTimeout(()=>{o.stop();c.close();},120);}catch(e){} }
+function add(code){
+  code=String(code).replace(/\D/g,''); if(!code) return;
+  const agora=Date.now();
+  if(code===ultimo && agora-ultimoT<2500) return;   // evita duplicar no mesmo bip
+  ultimo=code; ultimoT=agora;
+  const j=lista.find(x=>x.ean===code);
+  if(j) j.qtd++; else lista.push({ean:code,qtd:1});
+  beepOk(); st('✅ '+code); render();
+}
+function addManual(){ add(document.getElementById('ean').value); document.getElementById('ean').value=''; }
+function render(){
+  document.getElementById('tot').textContent=lista.reduce((s,x)=>s+x.qtd,0)+' item(ns)';
+  document.getElementById('tb').innerHTML=lista.map((x,i)=>'<tr><td style="font-family:monospace">'+x.ean+'</td>'+
+    '<td style="width:130px;white-space:nowrap"><button class="sec qbt" onclick="mq('+i+',-1)">−</button> <b>'+x.qtd+'</b> <button class="sec qbt" onclick="mq('+i+',1)">+</button></td>'+
+    '<td style="width:40px"><button class="sec qbt" onclick="lista.splice('+i+',1);render()">✕</button></td></tr>').join('');
+}
+function mq(i,d){ lista[i].qtd+=d; if(lista[i].qtd<1) lista.splice(i,1); render(); }
+async function toggleScan(){
+  const v=document.getElementById('scanbox');
+  if(scanStream||zxReader){ stopScan(); return; }
+  try{
+    if('BarcodeDetector' in window){
+      scanStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+      v.srcObject=scanStream; v.style.display='block'; await v.play();
+      const det=new BarcodeDetector({formats:['ean_13','ean_8','code_128','upc_a']});
+      scanTimer=setInterval(async()=>{ try{ const cs=await det.detect(v); if(cs.length) add(cs[0].rawValue); }catch(e){} },350);
+    } else {
+      zxReader=new ZXing.BrowserMultiFormatReader();
+      v.style.display='block';
+      await zxReader.decodeFromVideoDevice(null, v, (res,err)=>{ if(res) add(res.getText()); });
+    }
+    document.getElementById('btnCam').textContent='✖ Fechar câmera';
+  }catch(err){ stopScan(); alert('Não consegui abrir a câmera ('+(err.message||err)+'). Verifique a permissão de câmera do navegador.'); }
+}
+function stopScan(){
+  clearInterval(scanTimer); scanTimer=null;
+  if(scanStream){ scanStream.getTracks().forEach(t=>t.stop()); scanStream=null; }
+  if(zxReader){ try{zxReader.reset();}catch(e){} zxReader=null; }
+  const v=document.getElementById('scanbox'); v.style.display='none'; v.srcObject=null;
+  document.getElementById('btnCam').textContent='📷 Abrir câmera';
+}
+document.getElementById('btnCam').onclick=toggleScan;
+document.getElementById('ean').addEventListener('keydown',e=>{ if(e.key==='Enter') addManual(); });
+function enviar(){
+  if(!lista.length){ alert('Bipe algum produto primeiro.'); return; }
+  stopScan();
+  const loja=document.getElementById('loja').value;
+  const codigos=lista.map(x=>x.ean+':'+x.qtd).join(',');
+  location.href=FILA_URL+'?acao=receber&loja='+loja+'&volta='+encodeURIComponent(location.href)+'&codigos='+codigos;
+}
+</script>
+</body>
+</html>
