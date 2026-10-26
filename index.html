@@ -4758,13 +4758,18 @@ document.getElementById('tbody').addEventListener('input', e=>{
 document.getElementById('tbody').addEventListener('click', e=>{
   if(e.target.dataset.del!==undefined){ itens.splice(e.target.dataset.del,1); render(); }
 });
+// edições da mesma campanha (ex.: Oferta da Semana que termina hoje × a que começa amanhã)
+function _dm(s){ const p=String(s||'').split('/').map(Number); return (p[1]||0)*100+(p[0]||0); }
+function _maisNova(a,b){ const x=_dm(a), y=_dm(b); return Math.abs(x-y)>600 ? x<y : x>y; }
+function edicaoVencendo(it){ if(!it.camp) return false; return itens.some(o=>o.camp===it.camp && o.inicio!==it.inicio && _maisNova(o.inicio,it.inicio)); }
 function visivel(it){
   const filtro = document.getElementById('filtro').value.trim().toUpperCase();
   if(filtro && !(it.nome+' '+it.codigo).toUpperCase().includes(filtro)) return false;
   const modo = document.getElementById('soEncarte').value;
   if(modo==='1' && !it.destaque) return false;
   if(modo==='pai' && !it.pai) return false;
-  if(modo && modo!=='1' && modo!=='pai' && it.camp!==modo) return false;
+  if(modo && modo!=='1' && modo!=='pai'){ const [mc,mi]=modo.split('|'); if(it.camp!==mc) return false; if(mi && it.inicio!==mi) return false; }
+  if(!modo.includes('|') && edicaoVencendo(it)) return false; // não mistura a edição que termina com a que começa
   const sec = document.getElementById('fSecao').value;
   if(sec && it.secao && it.secao !== sec) return false;
   if(sec && !it.secao) return false;
@@ -4781,8 +4786,8 @@ function montarSecoes(){
   const camps = [...new Set(itens.map(i=>i.camp).filter(Boolean))];
   camps.sort((a,b)=>campTipoNome(a).localeCompare(campTipoNome(b)));
   se.innerHTML = '<option value="">Todos os itens</option><option value="1">⭐ Só encarte da semana</option><option value="pai">👑 Só produtos pai</option>' +
-    camps.map(c=>'<option value="'+esc(c)+'"'+(c===atualM?' selected':'')+'>'+campBadge(c)+' Só '+campTipoNome(c).replace(/^\S+\s/,'')+'</option>').join('');
-  if(atualM && !['','1','pai'].includes(atualM) && !camps.includes(atualM)) se.value='';
+    camps.map(c=>{ const nome=campBadge(c)+' Só '+campTipoNome(c).replace(/^\S+\s/,''); const eds=[...new Set(itens.filter(i=>i.camp===c).map(i=>i.inicio+'|'+i.fim))].sort((a,b)=>_maisNova(a.split('|')[0],b.split('|')[0])?-1:1); if(eds.length<2) return '<option value="'+esc(c)+'"'+(c===atualM?' selected':'')+'>'+nome+'</option>'; return eds.map(e=>{ const [ini,fim]=e.split('|'); const v=c+'|'+ini; return '<option value="'+esc(v)+'"'+(v===atualM?' selected':'')+'>'+nome+' · '+ini+(fim&&fim!==ini?' a '+fim:'')+'</option>'; }).join(''); }).join('');
+  if(atualM && !['','1','pai'].includes(atualM) && ![...se.options].some(o=>o.value===atualM)) se.value='';
 }
 document.getElementById('filtro').addEventListener('input', render);
 document.getElementById('soEncarte').addEventListener('change', render);
