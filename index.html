@@ -209,7 +209,7 @@ let seqManual = 1;
 
 /* ============ OFERTAS VIGENTES EMBUTIDAS (por loja) ============ */
 const PRELOAD_META = {geradoEm:'10/08 19:13', ini:'2026-09-01', fim:'2026-09-07'};
-const BUILD_ID = '20261019210252';
+const BUILD_ID = '20261029141348';
 /* auto-atualização: se o site tem versão mais nova que a em cache, recarrega sozinho */
 (function(){
   fetch('versao.txt?x='+Date.now(), {cache:'no-store'})
@@ -4817,6 +4817,11 @@ function parseCombo(it){
   const isTotal = (val > it.por + 0.001) && !/CADA/.test(t);
   return {qtd: qtd, val: Math.round(val*100)/100, isTotal: isTotal, unit: Math.round(val*100)/100};
 }
+function ehAlcoolico(descr){
+  const d=' '+String(descr||'').toUpperCase()+' ';
+  if(d.includes('SEM ALCOOL')||d.includes('ZERO ALCOOL')||d.includes('0,0%')) return false;
+  return /CERVEJA|CERV |CHOPP|VINHO|ESPUMANTE|FRISANTE|WHISKY|WHISKEY|UISQUE|BOURBON|VODKA|VODCA|CACHACA|AGUARDENTE| PINGA | RUM | GIN |TEQUILA|LICOR|CONHAQUE|BRANDY|APERITIVO|CATUABA|JURUBEBA|SANGRIA|SIDRA|VERMUTE|VERMOUTH|CAMPARI| SAQUE | SAKE |STEINHAEGER|COQ ALC|COQUETEL ALC|SYN ICE|BEB ALC/.test(d);
+}
 function desenharPlaca(it, escala){
   const W = Math.round(1754*escala), H = Math.round(2482*escala);
   const cv = document.createElement('canvas'); cv.width=W; cv.height=H;
@@ -4960,6 +4965,31 @@ function desenharPlaca(it, escala){
         : 'Oferta válida de '+ini+' a '+fim+' ou enquanto durarem os estoques';
       ctx.fillText(txtVal, cx, 0.845*H);
     }
+  }
+  // --- selo automático 18+ para bebidas alcoólicas ---
+  if(ehAlcoolico(it.nome)){
+    const bh=0.052*H, by=0.878*H, bx=0.055*W;
+    const r=bh*0.42, cyy=by+bh/2;
+    ctx.save();
+    ctx.textAlign='left'; ctx.textBaseline='middle';
+    const fsS=bh*0.30;
+    ctx.font='900 '+fsS+'px "Arial Black", Arial, sans-serif';
+    const l1='PROIBIDA A VENDA DE BEBIDAS ALCOÓLICAS', l2='PARA MENORES DE 18 ANOS';
+    const tw=Math.max(ctx.measureText(l1).width, ctx.measureText(l2).width);
+    const bw=bh*1.25+tw+bh*0.35;
+    ctx.fillStyle='#fff'; ctx.strokeStyle='#D40000'; ctx.lineWidth=Math.max(2,0.0035*W);
+    roundRect(ctx,bx,by,bw,bh,bh*0.25); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(bx+bh*0.62,cyy,r,0,6.2832);
+    ctx.fillStyle='#D40000'; ctx.fill();
+    ctx.fillStyle='#fff'; ctx.textAlign='center';
+    ctx.font='900 '+(r*0.95)+'px "Arial Black", Arial, sans-serif';
+    ctx.fillText('18+', bx+bh*0.62, cyy+r*0.06);
+    ctx.fillStyle='#000'; ctx.textAlign='left';
+    ctx.font='900 '+fsS+'px "Arial Black", Arial, sans-serif';
+    ctx.fillText(l1, bx+bh*1.25, cyy-fsS*0.70);
+    ctx.fillText(l2, bx+bh*1.25, cyy+fsS*0.78);
+    ctx.restore();
+    ctx.textAlign='center'; ctx.textBaseline='alphabetic';
   }
   return cv;
 }
