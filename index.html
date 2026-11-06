@@ -4974,6 +4974,16 @@ function desenharPlaca(it, escala){
       ctx.fillText(txtVal, cx, 0.845*H);
     }
   }
+  // --- Scanntech: aviso discreto para o REPOSITOR (para o cliente não importa) ---
+  // No VR o item fica com o preço normal; o desconto do Clube sai no fim do cupom.
+  if(it.camp==='scan'){
+    ctx.save();
+    ctx.font = '600 '+(0.0115*H)+'px Arial, sans-serif';
+    ctx.fillStyle = 'rgba(90,90,90,0.75)';
+    ctx.textAlign = 'right';
+    ctx.fillText('SCANNTECH · desconto no fim do cupom', 0.925*W, 0.872*H);
+    ctx.restore();
+  }
   // --- selo automático 18+ para bebidas alcoólicas ---
   if(ehAlcoolico(it.nome) && selo18Img){
     const sh2=0.115*H, sw2=sh2*(selo18Img.width/selo18Img.height);
@@ -5221,7 +5231,7 @@ const CAMP_TIPOS = {q10:'🔟 Quarta é 10', terca:'🌱 Terça-feira Verde', qu
                     sextou:'🎉 Sextou', peixe:'🐟 Feira do Peixe', fdsverde:'🥬 FDS Verde',
                     bebe:'👶 Mundo do Bebê', beberm:'👶 Domingo do Bebê RM', halloween:'🎃 Halloween', aniversario:'🎂 Aniversário Rende Mais', lojaosemana:'🛍️ Semana do Lojão', ofertas:'🟠 Ofertas da Semana',
                     diamais:'🛒 Dia Mais', play:'▶️ Play no Feriadão',
-                    ofsem:'🟠 Oferta da Semana', offds:'🔥 Oferta do Fim de Semana'};
+                    ofsem:'🟠 Oferta da Semana', offds:'🔥 Oferta do Fim de Semana', scan:'🏷️ Scanntech'};
 function campTipoNome(id){ return CAMP_TIPOS[id] || id || 'Ofertas'; }
 function campBadge(id){ const n = CAMP_TIPOS[id]; return n ? n.split(' ')[0] : '📢'; }
 
