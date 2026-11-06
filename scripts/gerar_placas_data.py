@@ -350,6 +350,91 @@ def campanhas_do_encarte():
     return publicados
 
 
+def campanhas_scanntech():
+    """Promoções aceitas no Clube de Promoções (Scanntech) viram placas.
+
+    O app scanntech.html (pasta do App SQL) grava no Postgres do VR o que o
+    Robô KVI puxa do Clube: rm_scan_promo (preço/desconto, período, aceite),
+    rm_scan_ean (EANs de cada promoção) e rm_scan_loja (lojas que aceitaram).
+    Aqui viram linhas de campanha 'scan' em campanhas_placas.
+
+    No VR o item continua com o PREÇO NORMAL — o Scanntech dá o desconto no
+    final do cupom. Por isso o "de" é o preço do VR (o normal da oferta do VR,
+    se houver) e o "por" é o preço do Clube (tipo 4) ou o normal com o % do
+    Clube aplicado (tipo 6). A validade é sempre a do Clube.
+    Devolve os pares (código, loja) publicados, como campanhas_do_encarte().
+    """
+    try:
+        df = query_vr("""
+            WITH x AS (
+              SELECT p.id, p.tipo, p.preco, p.desconto_pct, p.desde, p.hasta,
+                     e.ean, e.nome, l.id_loja
+              FROM rm_scan_promo p
+              JOIN rm_scan_ean  e ON e.id_promo = p.id
+              JOIN rm_scan_loja l ON l.id_promo = p.id AND l.estado = 'ACEPTADA'
+              WHERE p.hasta >= CURRENT_DATE)
+            SELECT x.id AS id_promo, x.tipo, x.preco, x.desconto_pct,
+                   to_char(x.desde,'YYYY-MM-DD') AS inicio, to_char(x.hasta,'YYYY-MM-DD') AS fim,
+                   x.nome, x.id_loja, pa.id_produto AS codigo,
+                   pr.descricaocompleta AS descricao, COALESCE(mc.descricao,'OUTROS') AS secao,
+                   pc.precovenda, ofv.preconormal
+            FROM x
+            JOIN LATERAL (SELECT id_produto FROM produtoautomacao
+                          WHERE codigobarras = x.ean LIMIT 1) pa ON true
+            JOIN produto pr ON pr.id = pa.id_produto
+            LEFT JOIN mercadologico mc ON mc.mercadologico1 = pr.mercadologico1 AND mc.nivel = 1
+            LEFT JOIN produtocomplemento pc ON pc.id_produto = pa.id_produto AND pc.id_loja = x.id_loja
+            LEFT JOIN LATERAL (
+              SELECT o.preconormal FROM oferta o
+              WHERE o.id_produto = pa.id_produto AND o.id_loja = x.id_loja AND o.id_situacaooferta = 1
+                AND CURRENT_DATE BETWEEN o.datainicio AND o.datatermino
+              ORDER BY o.datainicio DESC LIMIT 1) ofv ON true""")
+    except Exception as e:  # noqa: BLE001
+        print(f"scanntech: não consegui ler as promoções do Clube ({e}); placas seguem sem elas.")
+        return set()
+
+    linhas, publicados, vistos, problemas = [], set(), set(), []
+    for _, r in (df.iterrows() if df is not None and not df.empty else []):
+        try:
+            cod, lj = int(r["codigo"]), int(r["id_loja"])
+        except Exception:  # noqa: BLE001
+            continue
+        if (cod, lj) in vistos:          # mesmo produto em duas promoções: fica a 1ª
+            continue
+        de = float(r["preconormal"] or 0) or float(r["precovenda"] or 0)
+        if int(r["tipo"] or 0) == 6 and str(r["desconto_pct"]) not in ("", "nan", "None"):
+            por = round(de * (1 - float(r["desconto_pct"]) / 100), 2)
+        else:
+            por = float(r["preco"] or 0)
+        if de <= 0 or por <= 0 or por >= de:
+            problemas.append(cod)        # sem preço no VR ou Clube não é mais barato
+            continue
+        vistos.add((cod, lj))
+        linhas.append({
+            "camp": "scan", "loja": lj, "codigo": cod,
+            "descricao": " ".join(str(r["descricao"] or r["nome"] or "").split()),
+            "secao": str(r["secao"] or "OUTROS").strip(),
+            "de": round(de, 2), "por": round(por, 2), "obs": "",
+            "inicio": r["inicio"], "fim": r["fim"], "pendente": False,
+        })
+        publicados.add((cod, lj))
+
+    try:
+        requests.delete(f"{SB_URL}/rest/v1/campanhas_placas?camp=eq.scan",
+                        headers=SBH, timeout=60).raise_for_status()
+        for i in range(0, len(linhas), 500):
+            requests.post(f"{SB_URL}/rest/v1/campanhas_placas",
+                          headers={**SBH, "Prefer": "return=minimal"},
+                          json=linhas[i:i + 500], timeout=60).raise_for_status()
+    except Exception as e:  # noqa: BLE001
+        print(f"scanntech: falhou ao gravar em campanhas_placas ({e}).")
+        return set()
+    print(f"scanntech: {len(linhas)} placas (produto × loja) das promoções do Clube.")
+    if problemas:
+        print(f"scanntech: ATENÇÃO — sem preço no VR ou preço do Clube não é menor, fora das placas: {sorted(set(problemas))}")
+    return publicados
+
+
 def main():
     # vendas 30d (rede) dos produtos em promoção vigente — para eleger o produto pai
     vendas = query_vr("""
@@ -376,6 +461,10 @@ def main():
     except Exception as e:  # noqa: BLE001
         print(f"encarte: falhou ({e}); dados principais seguem normais.")
         do_encarte = set()
+    try:
+        do_encarte |= campanhas_scanntech()   # placas das promoções do Clube (Scanntech)
+    except Exception as e:  # noqa: BLE001
+        print(f"scanntech: falhou ({e}); dados principais seguem normais.")
 
     total = 0
     for loja in LOJAS:
