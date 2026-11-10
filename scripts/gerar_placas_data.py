@@ -401,21 +401,29 @@ def campanhas_scanntech():
             continue
         if (cod, lj) in vistos:          # mesmo produto em duas promoções: fica a 1ª
             continue
-        de = float(r["preconormal"] or 0) or float(r["precovenda"] or 0)
-        if int(r["tipo"] or 0) == 6 and str(r["desconto_pct"]) not in ("", "nan", "None"):
-            por = round(de * (1 - float(r["desconto_pct"]) / 100), 2)
+        # campo vazio no CSV vira NaN no pandas — e NaN não é "falso" em Python:
+        # sem esta conversão o "de" virava NaN e o envio inteiro era recusado
+        def num(v):
+            try:
+                f = float(v)
+            except (TypeError, ValueError):
+                return 0.0
+            return 0.0 if f != f else f
+        de = num(r["preconormal"]) or num(r["precovenda"])
+        if int(num(r["tipo"])) == 6 and num(r["desconto_pct"]) > 0:
+            por = round(de * (1 - num(r["desconto_pct"]) / 100), 2)
         else:
-            por = float(r["preco"] or 0)
+            por = num(r["preco"])
         if de <= 0 or por <= 0 or por >= de:
             problemas.append(cod)        # sem preço no VR ou Clube não é mais barato
             continue
         vistos.add((cod, lj))
         linhas.append({
             "camp": "scan", "loja": lj, "codigo": cod,
-            "descricao": " ".join(str(r["descricao"] or r["nome"] or "").split()),
-            "secao": str(r["secao"] or "OUTROS").strip(),
+            "descricao": " ".join(str(r["descricao"] if pd.notna(r["descricao"]) else r["nome"]).split()),
+            "secao": str(r["secao"] if pd.notna(r["secao"]) else "OUTROS").strip(),
             "de": round(de, 2), "por": round(por, 2), "obs": "",
-            "inicio": r["inicio"], "fim": r["fim"], "pendente": False,
+            "inicio": str(r["inicio"]), "fim": str(r["fim"]), "pendente": False,
         })
         publicados.add((cod, lj))
 
