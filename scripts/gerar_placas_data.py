@@ -461,7 +461,24 @@ def campanhas_scanntech():
             problemas.append(cod)        # sem preço no VR ou Clube não é mais barato
             continue
         vistos.add((cod, lj, str(r["inicio"])))
+        # família para o filtro "só produtos pai" do app: a do VR; sem ela,
+        # agrupa pelas 3 primeiras palavras + gramatura (último termo da descrição)
+        try:
+            fam = int(float(r["familia"])) if pd.notna(r["familia"]) else 0
+        except Exception:  # noqa: BLE001
+            fam = 0
+        if fam:
+            chave_fam = ("f", fam)
+        else:
+            pal = " ".join(str(r["descricao"] if pd.notna(r["descricao"]) else r["nome"]).split()).split(" ")
+            chave_fam = ("d", " ".join(pal[:3]), pal[-1] if pal else "")
+        try:
+            q30 = float(r["qtd30"]) if pd.notna(r["qtd30"]) else 0.0
+        except Exception:  # noqa: BLE001
+            q30 = 0.0
         linhas.append({
+            "_ch": (str(r["id_promo"]), lj, str(r["inicio"]), chave_fam), "_q": q30,
+            "familia": fam, "pai": True,
             "camp": "scan", "loja": lj, "codigo": cod,
             "descricao": " ".join(str(r["descricao"] if pd.notna(r["descricao"]) else r["nome"]).split()),
             "secao": str(r["secao"] if pd.notna(r["secao"]) else "OUTROS").strip(),
@@ -469,6 +486,21 @@ def campanhas_scanntech():
             "inicio": str(r["inicio"]), "fim": str(r["fim"]), "pendente": False,
         })
         publicados.add((cod, lj))
+
+    # produto pai = o mais vendido (30d) de cada família, por promoção × loja × edição
+    melhor, tam = {}, {}
+    for i, l in enumerate(linhas):
+        ch = l["_ch"]
+        tam[ch] = tam.get(ch, 0) + 1
+        if ch not in melhor or l["_q"] > linhas[melhor[ch]]["_q"]:
+            melhor[ch] = i
+    pais_idx = set(melhor.values())
+    for i, l in enumerate(linhas):
+        l["pai"] = i in pais_idx
+        if not l["familia"] and tam[l["_ch"]] > 1:
+            l["familia"] = 1          # agrupado pela descrição (sem família no VR)
+        del l["_ch"], l["_q"]
+    print(f"scanntech: {len(pais_idx)} produtos pai de {len(linhas)} placas (filtro 👑 do app).")
 
     try:
         requests.delete(f"{SB_URL}/rest/v1/campanhas_placas?camp=eq.scan",
