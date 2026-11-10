@@ -375,7 +375,7 @@ def campanhas_scanntech():
               WHERE p.hasta >= CURRENT_DATE)
             SELECT x.id AS id_promo, x.tipo, x.preco, x.desconto_pct,
                    to_char(x.desde,'YYYY-MM-DD') AS inicio, to_char(x.hasta,'YYYY-MM-DD') AS fim,
-                   x.nome, x.id_loja, pa.id_produto AS codigo,
+                   x.nome, x.id_loja, pa.id_produto AS codigo, pr.id_familiaproduto AS familia, COALESCE(vd.qtd30, 0) AS qtd30,
                    pr.descricaocompleta AS descricao, COALESCE(mc.descricao,'OUTROS') AS secao,
                    pc.precovenda, ofv.preconormal
             FROM x
@@ -388,10 +388,51 @@ def campanhas_scanntech():
               SELECT o.preconormal FROM oferta o
               WHERE o.id_produto = pa.id_produto AND o.id_loja = x.id_loja AND o.id_situacaooferta = 1
                 AND CURRENT_DATE BETWEEN o.datainicio AND o.datatermino
-              ORDER BY o.datainicio DESC LIMIT 1) ofv ON true""")
+              ORDER BY o.datainicio DESC LIMIT 1) ofv ON true
+            LEFT JOIN (SELECT vi.id_produto, SUM(vi.quantidade) AS qtd30
+                         FROM pdv.vendaitem vi
+                        WHERE vi.data >= CURRENT_DATE - 30
+                          AND vi.id_produto IN (SELECT pa2.id_produto
+                                                  FROM rm_scan_ean e2
+                                                  JOIN produtoautomacao pa2 ON pa2.codigobarras = e2.ean)
+                        GROUP BY vi.id_produto) vd ON vd.id_produto = pa.id_produto""")
     except Exception as e:  # noqa: BLE001
         print(f"scanntech: não consegui ler as promoções do Clube ({e}); placas seguem sem elas.")
         return set()
+
+    # "Uma placa por familia" (produto pai): liga/desliga no scanntech.html,
+    # config scan_cfg no Supabase. Agrupa por (promocao, familia do VR) e deixa
+    # so o item de maior venda 30d — evita placa repetida por sabor/fragrancia.
+    # Item sem familia cadastrada fica como esta.
+    so_pai = False
+    try:
+        cfg = sb_get("scan_cfg?id=eq.1&select=so_pai")
+        so_pai = bool(cfg and cfg[0].get("so_pai"))
+    except Exception as e:  # noqa: BLE001
+        print(f"scanntech: nao li a config 'so produtos pai' ({e}); seguindo com todos.")
+    if so_pai and len(df):
+        def _fam(r):
+            try:
+                return int(float(r["familia"])) if pd.notna(r["familia"]) else 0
+            except Exception:
+                return 0
+        melhor = {}
+        for _, r in df.iterrows():
+            fam = _fam(r)
+            if not fam:
+                continue
+            try:
+                ch = (int(float(r["id_promo"])), fam)
+                q30 = float(r["qtd30"]) if pd.notna(r["qtd30"]) else 0.0
+                cod = int(float(r["codigo"]))
+            except Exception:
+                continue
+            if ch not in melhor or q30 > melhor[ch][1]:
+                melhor[ch] = (cod, q30)
+        pais = {v[0] for v in melhor.values()}
+        antes = len(df)
+        df = df[df.apply(lambda r: (not _fam(r)) or int(float(r["codigo"])) in pais, axis=1)]
+        print(f"scanntech: so produtos pai LIGADO — {antes} -> {len(df)} linhas (uma por familia em cada promocao).")
 
     linhas, publicados, vistos, problemas = [], set(), set(), []
     for _, r in (df.iterrows() if df is not None and not df.empty else []):
