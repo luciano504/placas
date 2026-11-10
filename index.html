@@ -108,6 +108,8 @@ footer{text-align:center;color:#999;font-size:12px;padding:14px}
       <select id="fSecao"><option value="">Todas</option></select></div>
     <div><label>Mostrar</label>
       <select id="soEncarte"><option value="">Todos os itens</option><option value="1">⭐ Só encarte da semana</option><option value="pai">👑 Só produtos pai</option></select></div>
+    <div><label title="Uma placa por família: esconde os outros sabores/fragrâncias do mesmo preço e deixa só o mais vendido. Vale junto com qualquer opção do Mostrar (ex.: Só Scanntech)">&nbsp;</label>
+      <label style="display:flex;align-items:center;gap:6px;white-space:nowrap;font-weight:600;cursor:pointer;height:38px"><input type="checkbox" id="soPai"> 👑 só produtos pai</label></div>
     <div><label>Tamanho p/ selecionados</label>
       <select id="bulkTam"><option value="">—</option><option>A2</option><option>A3</option><option>A4</option><option>A5</option><option>A6</option></select></div>
     <button class="sec" id="btnMarcar">Marcar todos</button>
@@ -209,7 +211,7 @@ let seqManual = 1;
 
 /* ============ OFERTAS VIGENTES EMBUTIDAS (por loja) ============ */
 const PRELOAD_META = {geradoEm:'10/08 19:13', ini:'2026-09-01', fim:'2026-09-07'};
-const BUILD_ID = '20261105181843';
+const BUILD_ID = '20261110220827';
 /* auto-atualização: se o site tem versão mais nova que a em cache, recarrega sozinho */
 (function(){
   fetch('versao.txt?x='+Date.now(), {cache:'no-store'})
@@ -4773,6 +4775,7 @@ function visivel(it){
   const modo = document.getElementById('soEncarte').value;
   if(modo==='1' && !it.destaque) return false;
   if(modo==='pai' && !it.pai) return false;
+  const _sp=document.getElementById('soPai'); if(_sp && _sp.checked && !it.pai) return false;
   if(modo && modo!=='1' && modo!=='pai'){ const [mc,mi]=modo.split('|'); if(it.camp!==mc) return false; if(mi && it.inicio!==mi) return false; }
   if(!modo.includes('|') && edicaoVencendo(it)) return false; // não mistura a edição que termina com a que começa
   const sec = document.getElementById('fSecao').value;
@@ -4796,6 +4799,7 @@ function montarSecoes(){
 }
 document.getElementById('filtro').addEventListener('input', render);
 document.getElementById('soEncarte').addEventListener('change', render);
+document.getElementById('soPai').addEventListener('change', render);
 document.getElementById('fSecao').addEventListener('change', render);
 document.getElementById('chkAll').addEventListener('change', e=>{ itens.forEach(i=>{ if(visivel(i)) i.sel=e.target.checked; }); render(); });
 document.getElementById('btnMarcar').addEventListener('click', ()=>{ itens.forEach(i=>{ if(visivel(i)) i.sel=true; }); render(); });
@@ -5223,7 +5227,7 @@ async function campanhasSupabase(loja){
   if(!r.ok) throw new Error('sb '+r.status);
   const rows = await r.json();
   return rows.map(c => [String(c.codigo), c.descricao||'', (+c.de||0).toFixed(2), (+c.por||0).toFixed(2),
-                        ddmm(c.inicio), ddmm(c.fim), c.secao||'OUTROS', 0, 1, c.camp||'', c.obs||'']
+                        ddmm(c.inicio), ddmm(c.fim), c.secao||'OUTROS', (+c.familia||0), (c.pai===false?0:1), c.camp||'', c.obs||'']
                   .map(v => '"'+String(v).replace(/"/g,'""')+'"').join(','));
 }
 
