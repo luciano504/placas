@@ -399,7 +399,9 @@ def campanhas_scanntech():
             cod, lj = int(r["codigo"]), int(r["id_loja"])
         except Exception:  # noqa: BLE001
             continue
-        if (cod, lj) in vistos:          # mesmo produto em duas promoções: fica a 1ª
+        # mesmo produto em duas promoções: só descarta se for a MESMA edição (mesmo início).
+        # Edição que termina hoje e a que começa amanhã ficam separadas, cada uma com a sua validade.
+        if (cod, lj, str(r["inicio"])) in vistos:
             continue
         # campo vazio no CSV vira NaN no pandas — e NaN não é "falso" em Python:
         # sem esta conversão o "de" virava NaN e o envio inteiro era recusado
@@ -417,7 +419,7 @@ def campanhas_scanntech():
         if de <= 0 or por <= 0 or por >= de:
             problemas.append(cod)        # sem preço no VR ou Clube não é mais barato
             continue
-        vistos.add((cod, lj))
+        vistos.add((cod, lj, str(r["inicio"])))
         linhas.append({
             "camp": "scan", "loja": lj, "codigo": cod,
             "descricao": " ".join(str(r["descricao"] if pd.notna(r["descricao"]) else r["nome"]).split()),
