@@ -518,6 +518,123 @@ def campanhas_scanntech():
     return publicados
 
 
+def campanhas_parceria():
+    """Promoções aceitas no app Campanhas (verbas de fornecedor) viram placas.
+
+    Lê do Supabase as campanhas com status 'vigente' e os itens 'aprovado';
+    cada item sai em cada loja da campanha com a validade do item (ou da
+    campanha). "Por" = preço sugerido aceito; "de" = preço normal do VR
+    (o normal da oferta, se já estiver lançada), senão o preço de referência
+    gravado na campanha. Grava como camp='parceria' em campanhas_placas.
+    Devolve os pares (código, loja) publicados, como as outras pontes.
+    """
+    hoje = datetime.now(RECIFE).date().isoformat()
+    try:
+        camps = sb_get(f"campanhas?status=eq.vigente&fim=gte.{hoje}"
+                       "&select=id,nome,inicio,fim,lojas,fornecedor_chave")
+        if not camps:
+            print("parceria: nenhuma campanha vigente no Campanhas.")
+            linhas = []
+        else:
+            ids = ",".join(str(c["id"]) for c in camps)
+            itens = sb_get(f"campanha_itens?campanha_id=in.({ids})&status=eq.aprovado"
+                           "&select=campanha_id,ean,descricao,secao,preco_sugerido,"
+                           "preco_ref,inicio_item,fim_item&limit=10000")
+    except Exception as e:  # noqa: BLE001
+        print(f"parceria: não consegui ler o Campanhas ({e}); placas seguem sem elas.")
+        return set()
+    if not camps:
+        itens = []
+
+    eans = sorted({str(i["ean"]).lstrip("0") for i in itens if str(i.get("ean") or "").strip("0")})
+    vr = {}
+    if eans:
+        lista = ",".join(eans)
+        try:
+            df = query_vr(f"""
+                SELECT pa.codigobarras::text AS ean, pa.id_produto AS codigo, l.id_loja,
+                       pr.descricaocompleta AS descricao, COALESCE(mc.descricao,'OUTROS') AS secao,
+                       pc.precovenda, ofv.preconormal
+                FROM produtoautomacao pa
+                JOIN produto pr ON pr.id = pa.id_produto
+                CROSS JOIN (VALUES (1),(2),(3),(4),(5),(8),(9)) AS l(id_loja)
+                LEFT JOIN mercadologico mc ON mc.mercadologico1 = pr.mercadologico1 AND mc.nivel = 1
+                LEFT JOIN produtocomplemento pc ON pc.id_produto = pa.id_produto AND pc.id_loja = l.id_loja
+                LEFT JOIN LATERAL (
+                  SELECT o.preconormal FROM oferta o
+                  WHERE o.id_produto = pa.id_produto AND o.id_loja = l.id_loja AND o.id_situacaooferta = 1
+                    AND CURRENT_DATE BETWEEN o.datainicio AND o.datatermino
+                  ORDER BY o.datainicio DESC LIMIT 1) ofv ON true
+                WHERE pa.codigobarras IN ({lista})""")
+        except Exception as e:  # noqa: BLE001
+            print(f"parceria: não consegui ler o VR ({e}).")
+            return set()
+
+        def num(v):
+            try:
+                f = float(v)
+            except (TypeError, ValueError):
+                return 0.0
+            return 0.0 if f != f else f
+        for _, r in df.iterrows():
+            vr[(str(r["ean"]).split(".")[0].lstrip("0"), int(r["id_loja"]))] = {
+                "codigo": int(r["codigo"]), "descricao": r["descricao"], "secao": r["secao"],
+                "de": num(r["preconormal"]) or num(r["precovenda"])}
+
+    porcamp = {c["id"]: c for c in camps}
+    linhas, publicados, vistos, fora = [], set(), set(), []
+    for it in itens:
+        c = porcamp.get(it["campanha_id"])
+        if not c:
+            continue
+        ini = it.get("inicio_item") or c["inicio"]
+        fim = it.get("fim_item") or c["fim"]
+        if not fim or fim < hoje:
+            continue
+        por = float(it.get("preco_sugerido") or 0)
+        for lj_txt in (c.get("lojas") or []):
+            try:
+                lj = int(str(lj_txt).upper().replace("L", ""))
+            except ValueError:
+                continue
+            v = vr.get((str(it["ean"]).lstrip("0"), lj))
+            if not v:
+                fora.append(f'{it["ean"]} (sem cadastro no VR)')
+                continue
+            de = v["de"] or float(it.get("preco_ref") or 0)
+            if v["de"] and abs(v["de"] - por) < 0.005 and float(it.get("preco_ref") or 0) > por:
+                de = float(it["preco_ref"])   # VR já está com o preço da campanha: "de" = referência
+            if por <= 0 or de <= por:
+                fora.append(f'{v["codigo"]} L{lj:02d} (de {de:.2f} × por {por:.2f})')
+                continue
+            if (v["codigo"], lj, ini) in vistos:
+                continue
+            vistos.add((v["codigo"], lj, ini))
+            linhas.append({
+                "camp": "parceria", "loja": lj, "codigo": v["codigo"],
+                "descricao": " ".join(str(v["descricao"] or it.get("descricao") or "").split()),
+                "secao": str(v["secao"] or it.get("secao") or "OUTROS").strip(),
+                "de": round(de, 2), "por": round(por, 2), "obs": "",
+                "inicio": ini, "fim": fim, "pendente": False, "familia": 0, "pai": True,
+            })
+            publicados.add((v["codigo"], lj))
+
+    try:
+        requests.delete(f"{SB_URL}/rest/v1/campanhas_placas?camp=eq.parceria",
+                        headers=SBH, timeout=60).raise_for_status()
+        for i in range(0, len(linhas), 500):
+            requests.post(f"{SB_URL}/rest/v1/campanhas_placas",
+                          headers={**SBH, "Prefer": "return=minimal"},
+                          json=linhas[i:i + 500], timeout=60).raise_for_status()
+    except Exception as e:  # noqa: BLE001
+        print(f"parceria: falhou ao gravar em campanhas_placas ({e}).")
+        return set()
+    print(f"parceria: {len(linhas)} placas (produto × loja) das campanhas aceitas no Campanhas.")
+    if fora:
+        print(f"parceria: ATENÇÃO — fora das placas: {sorted(set(fora))[:40]}")
+    return publicados
+
+
 def main():
     # vendas 30d (rede) dos produtos em promoção vigente — para eleger o produto pai
     vendas = query_vr("""
@@ -548,6 +665,10 @@ def main():
         do_encarte |= campanhas_scanntech()   # placas das promoções do Clube (Scanntech)
     except Exception as e:  # noqa: BLE001
         print(f"scanntech: falhou ({e}); dados principais seguem normais.")
+    try:
+        do_encarte |= campanhas_parceria()    # placas das campanhas aceitas no app Campanhas
+    except Exception as e:  # noqa: BLE001
+        print(f"parceria: falhou ({e}); dados principais seguem normais.")
 
     total = 0
     for loja in LOJAS:
